@@ -260,7 +260,8 @@ class Course:
                             12: "content",
                         }
                         if element_type not in element_type_map:
-                            logger.error("未适配的类型!")
+                            logger.error(f"未适配的类型 {element_type}")
+                            logger.debug(element)
                             raise
 
                         page_info["type"] = element_type_map[element_type]

@@ -10,7 +10,7 @@ class Config(BaseModel):
 
     def save(self, path: str = "ulearning.json"):
         """保存配置到 JSON 文件"""
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(self.model_dump_json(indent=4))
 
     @classmethod
@@ -21,5 +21,5 @@ class Config(BaseModel):
             default_config.save(path)
             return default_config
 
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return cls.model_validate_json(f.read())

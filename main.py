@@ -44,7 +44,7 @@ class Main:
                 [
                     inquirer.List(
                         "choice",
-                        message="请选择",
+                        message="请选择 (上下箭头 - 切换 | 空格 - 选中 | 回车 - 确认)",
                         choices=self.choices,
                     )
                 ]
@@ -175,7 +175,13 @@ class RushCourse:
     def menu(self):
         while True:
             choice = prompt(
-                [inquirer.List(name="choice", message="请选择", choices=self.choices)]
+                [
+                    inquirer.List(
+                        name="choice",
+                        message="请选择 (上下箭头 - 切换 | 空格 - 选中 | 回车 - 确认)",
+                        choices=self.choices,
+                    )
+                ]
             )["choice"]
             if choice == "配置刷课":
                 self.configure_courses()
@@ -279,7 +285,7 @@ class RushCourse:
             [
                 inquirer.Checkbox(
                     name="course_ids",
-                    message="请选择要刷的课程",
+                    message="请选择要刷的课程 (上下箭头 - 切换 | 空格 - 选中 | 回车 - 确认)",
                     choices=courses_choices,
                 )
             ]
@@ -310,7 +316,7 @@ class RushCourse:
             [
                 inquirer.Checkbox(
                     name="textbook_ids",
-                    message="请选择要刷的教材",
+                    message="请选择要刷的教材 (上下箭头 - 切换 | 空格 - 选中 | 回车 - 确认)",
                     choices=textbooks_choices,
                 )
             ]
