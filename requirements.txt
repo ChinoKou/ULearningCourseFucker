@@ -1,0 +1,6 @@
+loguru
+httpx
+pydantic
+inquirer
+pycryptodome
+Crypto
