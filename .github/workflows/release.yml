@@ -1,0 +1,243 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_mode:
+        description: "Version mode"
+        required: true
+        type: choice
+        options:
+          - "auto"
+          - "manual"
+        default: "auto"
+
+      manual_version:
+        description: "Manual version"
+        required: false
+        type: string
+        default: ""
+
+      release_type:
+        description: "Release type"
+        required: true
+        type: choice
+        options:
+          - "release"
+          - "beta"
+        default: "release"
+
+      increment_type:
+        description: "Version increment type"
+        required: false
+        type: choice
+        options:
+          - "patch"
+          - "minor"
+          - "major"
+        default: "patch"
+
+jobs:
+  prepare-version:
+    name: Prepare Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+
+          LATEST_VERSION=${LATEST_TAG#v}
+          LATEST_VERSION=${LATEST_VERSION%-beta}
+
+          if [ "${{ github.event.inputs.version_mode }}" = "manual" ]; then
+            VERSION="${{ github.event.inputs.manual_version }}"
+            if [ -z "$VERSION" ]; then
+              echo "Error: Manual version is required when version_mode is manual"
+              exit 1
+            fi
+          else
+            IFS='.' read -r -a VERSION_PARTS <<< "$LATEST_VERSION"
+            MAJOR="${VERSION_PARTS[0]:-0}"
+            MINOR="${VERSION_PARTS[1]:-0}"
+            PATCH="${VERSION_PARTS[2]:-0}"
+            
+            case "${{ github.event.inputs.increment_type }}" in
+              major)
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                ;;
+              minor)
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                ;;
+              patch)
+                PATCH=$((PATCH + 1))
+                ;;
+            esac
+            
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          fi
+
+          if [ "${{ github.event.inputs.release_type }}" = "beta" ]; then
+            TAG="v${VERSION}-beta"
+          else
+            TAG="v${VERSION}"
+          fi
+
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Generated version: ${VERSION}"
+          echo "Generated tag: ${TAG}"
+
+  build:
+    name: Build on ${{ matrix.platform }}
+    needs: prepare-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-linux
+            artifact_name: ULearningCourseFucker-linux
+          - os: windows-latest
+            platform: windows
+            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-windows.exe
+            artifact_name: ULearningCourseFucker-windows
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install nuitka ordered-set zstandard
+          sudo apt-get update
+          sudo apt-get install -y ccache patchelf upx
+
+      - name: Install dependencies (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install nuitka ordered-set zstandard
+
+      - name: Install UPX (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          choco install upx -y
+
+          upx --version
+
+      - name: Build with Nuitka (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          python -m nuitka \
+            --onefile \
+            --standalone \
+            --assume-yes-for-downloads \
+            --lto=yes \
+            --jobs=$(nproc) \
+            --enable-plugin=upx \
+            --output-filename=${{ matrix.output_name }} \
+            main.py
+
+      - name: Build with Nuitka (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          python -m nuitka `
+            --mingw64 `
+            --standalone `
+            --onefile `
+            --assume-yes-for-downloads `
+            --lto=yes `
+            --jobs=2 `
+            --enable-plugin=upx `
+            --onefile-no-compression `
+            --output-filename=${{ matrix.output_name }} `
+            main.py
+
+      - name: Verify build output (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          ls -lah ${{ matrix.output_name }}
+          file ${{ matrix.output_name }}
+
+      - name: Verify build output (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          Get-Item ${{ matrix.output_name }} | Format-List
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.output_name }}
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: [prepare-version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R ./artifacts
+
+      - name: Get build time (UTC+8)
+        id: build-time
+        run: |
+          BUILD_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S %Z')
+          echo "time=${BUILD_TIME}" >> $GITHUB_OUTPUT
+          echo "Build time: ${BUILD_TIME}"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-version.outputs.tag }}
+          name: Release ${{ needs.prepare-version.outputs.tag }}
+          draft: false
+          prerelease: ${{ github.event.inputs.release_type == 'beta' }}
+          generate_release_notes: true
+          body: |
+            ## ULearningCourseFucker ${{ needs.prepare-version.outputs.tag }}
+
+            ### Version Info
+            - Version: ${{ needs.prepare-version.outputs.version }}
+            - Build Date: ${{ steps.build-time.outputs.time }}
+
+          files: |
+            ./artifacts/ULearningCourseFucker-linux/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-linux
+            ./artifacts/ULearningCourseFucker-windows/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-windows.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
