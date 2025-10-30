@@ -20,7 +20,7 @@ class Login:
         self.config = config
         self.user_info = config.users[username]
         self.token = ""
-        self.client = Client()
+        self.client = Client(verify=not self.config.debug)
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0"
         }
@@ -31,6 +31,7 @@ class Login:
         logger.debug("执行登录并获取 Token 和 用户信息")
 
         try:
+            resp = None
             url = "https://courseapi.ulearning.cn/users/login/v2"
             payload = {
                 "loginName": self.user_info["username"],
@@ -70,14 +71,17 @@ class Login:
 
         except Exception as e:
             logger.error(
-                f"执行登录并获取 Token 和 用户信息时发生错误: {e}\n{format_exc()}"
+                f"执行登录并获取 Token 和 用户信息时发生错误: "
+                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
             )
             return {}
 
     def check_login_status(self) -> bool:
         """检查 Token 是否有效"""
         logger.debug("检查 Token 是否有效")
+
         try:
+            resp = None
             url = f"https://courseapi.ulearning.cn/users/isValidToken/{self.user_info["token"]}"
 
             resp = self.client.get(url)
@@ -86,11 +90,13 @@ class Login:
                 raise
 
             # 检查接口返回值
-            if resp.text.strip().lower() == "true":
-                return True
+            return resp.text.strip().lower() == "true"
 
         except Exception as e:
-            logger.error(f"检查登录状态时发生错误: {e}\n{format_exc()}")
+            logger.error(
+                f"检查登录状态时发生错误: "
+                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
+            )
             return False
 
 
@@ -101,7 +107,9 @@ class Course:
     def get_courses(self) -> dict:
         """获取课程列表"""
         logger.debug("获取课程列表")
+
         try:
+            resp = None
             # 构造 url 与请求体
             url = "https://courseapi.ulearning.cn/courses/students"
             payload = {
@@ -132,14 +140,18 @@ class Course:
             return courses
 
         except Exception as e:
-            logger.error(f"获取课程列表出错: {e}\n{format_exc()}")
+            logger.error(
+                f"获取课程列表出错: "
+                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
+            )
             return {}
 
     def get_textbooks(self, course_id: int, class_id: int) -> dict:
         """获取教材列表"""
-        logger.debug(f"获取教材列表 课程 ID - {course_id} 班级 ID - {class_id}")
+        logger.info(f"获取教材列表 课程 ID - {course_id} 班级 ID - {class_id}")
 
         try:
+            resp = None
             # 构造 url 与请求体
             url = f"https://courseapi.ulearning.cn/textbook/student/{course_id}/list"
             payload = {
@@ -167,14 +179,18 @@ class Course:
             return textbooks
 
         except Exception as e:
-            logger.error(f"获取教材列表出错: {e}\n{format_exc()}")
+            logger.error(
+                f"获取教材列表出错: "
+                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
+            )
             return {}
 
     def get_chapters(self, textbook_id: int, class_id: int) -> dict:
         """获取章节列表"""
-        logger.debug(f"获取章节列表 教材 ID - {textbook_id} 班级 ID - {class_id}")
+        logger.info(f"获取章节列表 教材 ID - {textbook_id} 班级 ID - {class_id}")
 
         try:
+            resp = None
             # 构造 url 与请求体
             url = f"https://api.ulearning.cn/course/stu/{textbook_id}/directory"
             payload = {"classId": class_id}
@@ -219,14 +235,18 @@ class Course:
             return chapter_list
 
         except Exception as e:
-            logger.error(f"获取章节列表出错: {e}\n{format_exc()}")
+            logger.error(
+                f"获取章节列表出错: "
+                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
+            )
             return {}
 
     def get_item_info(self, chapter_id: int) -> dict:
-        """获取段落列表"""
-        logger.debug(f"获取段落列表, 章节 ID - {chapter_id}")
+        """获取项目列表"""
+        logger.info(f"获取项目列表, 章节 ID - {chapter_id}")
 
         try:
+            resp = None
             # 构造 url
             url = f"https://api.ulearning.cn/wholepage/chapter/stu/{chapter_id}"
 
@@ -257,11 +277,14 @@ class Course:
                         element_type_map = {
                             6: "question",
                             4: "video",
+                            10: "ppt",
                             12: "content",
                         }
                         if element_type not in element_type_map:
-                            logger.error(f"未适配的类型 {element_type}")
-                            logger.debug(element)
+                            logger.error(f"未适配的类型 TypeID - {element_type}, 请提供日志以供适配")
+                            logger.debug(
+                                json.dumps(element, ensure_ascii=False, indent=2)
+                            )
                             raise
 
                         page_info["type"] = element_type_map[element_type]
@@ -280,20 +303,24 @@ class Course:
                                         question_id, page_id
                                     ),
                                 }
-                        elif element_type == 12:
+                        else:
                             pass
 
             return item_info
 
         except Exception as e:
-            logger.error(f"获取段落列表出错: {e}\n{format_exc()}")
+            logger.error(
+                f"获取项目列表出错: "
+                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
+            )
             return {}
 
     def append_record_info(self, textbook_info: dict) -> dict:
-        """添加学习记录信息"""
-        logger.debug("添加学习记录信息")
+        """获取学习记录信息"""
+        logger.info(f"获取学习记录信息, 教材名 - {textbook_info["name"]}")
 
         try:
+            resp = None
             # 构造 url 与请求体
             url = f"https://api.ulearning.cn/studyrecord/item"
             payload = {"courseType": 4}
@@ -336,7 +363,10 @@ class Course:
             return textbook_info
 
         except Exception as e:
-            logger.error(f"获取学习记录过程出错: {e}\n{format_exc()}")
+            logger.error(
+                f"获取学习记录过程出错: "
+                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
+            )
             return textbook_info
 
     def start_rush_course(self, courses: dict) -> bool:
@@ -367,6 +397,11 @@ class Course:
                         retry = 0
                         while True:
                             study_start_time = self.initialize_course(item_id)
+                            if study_start_time == -1:
+                                logger.warning(
+                                    f'[项目][{item_id}] 跳过 "{item_info["name"]}"'
+                                )
+
                             pages: dict = item_info.get("pages", {})
 
                             page_record_list = []
@@ -374,8 +409,8 @@ class Course:
                                 pages=pages,
                                 page_record_list=page_record_list,
                                 class_id=course_info["class_id"],
-                                textbook_id=int(textbook_id),
-                                chapter_id=int(chapter_id),
+                                textbook_id=textbook_id,
+                                chapter_id=chapter_id,
                             )
                             sync_status = self.sync_course(
                                 item_id=item_id,
@@ -395,6 +430,8 @@ class Course:
 
                             retry += 1
 
+        return True
+
     def build_rush_info(
         self,
         pages: dict,
@@ -405,7 +442,6 @@ class Course:
     ):
         for page_id, page_info in dict(pages).items():
 
-            logger.info(f"[页面][{page_id}] 正在构造请求信息")
             element_info: dict = page_info.get("element_info", {})
             element_type = element_info["type"]
 
@@ -417,11 +453,14 @@ class Course:
                 "studyTime": 0,
                 "score": 0,
                 "answerTime": 1,
-                "submitTimes": 1,
+                "submitTimes": 0,
                 "questions": [],
                 "videos": [],
                 "speaks": [],
             }
+
+            logger.info(f"[页面][{page_id}] 正在构造请求信息, 类型: {element_type}")
+
             if element_type == "video":
                 start_time = int(time.time())
                 score = 100
@@ -431,43 +470,30 @@ class Course:
                         class_id=class_id,
                         textbook_id=textbook_id,
                         chapter_id=chapter_id,
-                        video_id=int(video_id),
+                        video_id=video_id,
                     )
                     video_length = video_info["length"]
                     study_time += video_length
-                    record_info = {
-                        "videoid": int(video_id),
-                        "current": video_length,
-                        "status": 1,
-                        "recordTime": video_length,
-                        "time": video_length + random.uniform(1, 5),
-                        "startEndTimeList": [
-                            {
-                                "startTime": start_time,
-                                "endTime": start_time + video_length,
-                            }
-                        ],
-                    }
-
-                    # end_timestamp = watch_time + start_time
-                    # for i in range(3):
-                    #     end_time = min(
-                    #         int(start_time + video_length * i / 3), end_timestamp
-                    #     )
-                    #     record_info["startEndTimeList"].append(
-                    #         {
-                    #             "startTime": start_time,
-                    #             "endTime": end_time,
-                    #         }
-                    #     )
-                    #     start_time = end_time
-
-                    study_record["videos"].append(record_info)
+                    study_record["videos"].append(
+                        {
+                            "videoid": video_id,
+                            "current": video_length,
+                            "status": 1,
+                            "recordTime": video_length,
+                            "time": video_length + random.uniform(1, 5),
+                            "startEndTimeList": [
+                                {
+                                    "startTime": start_time,
+                                    "endTime": start_time + video_length,
+                                }
+                            ],
+                        }
+                    )
 
             elif element_type == "question":
                 questions: dict = element_info.get("info", {})
 
-                study_time = random.randint(15, 60)
+                study_time = random.randint(120, 300)
                 study_record["coursepageId"] = page_info["relation_id"]
                 study_record["submitTimes"] = 1
 
@@ -486,26 +512,27 @@ class Course:
                         },
                     )
 
-            elif element_type == "content":
+            else:
                 score = 100
-                study_time = random.randint(3, 10)
+                study_time = random.randint(120, 300)
 
             study_record["score"] = score
             study_record["studyTime"] = study_time
 
             page_record_list.append(study_record)
-            sleep_time = random.uniform(0.5, 1.5)
-            logger.debug(f"模拟学习, 等待 {sleep_time:.2} 秒")
+            sleep_time = random.uniform(0.3, 1.2)
             time.sleep(sleep_time)
 
     def get_question_answer_list(self, question_id: int, parent_id: int) -> list:
         """获取答案列表"""
-        logger.debug(f"获取答案列表 问题 ID - {question_id} 页面 ID - {parent_id}")
+        logger.info(f"获取答案列表 问题 ID - {question_id} 页面 ID - {parent_id}")
 
         try:
+            resp = None
             # 构造 url 与请求体
             url = f"https://api.ulearning.cn/questionAnswer/{question_id}"
             payload = {"parentId": parent_id}
+
             resp = self.client.get(url=url, params=payload)
             if resp.status_code != 200:
                 raise
@@ -515,7 +542,10 @@ class Course:
             return resp_json["correctAnswerList"]
 
         except Exception as e:
-            logger.error(f"获取答案时出错: {e}\n{format_exc()}")
+            logger.error(
+                f"获取答案时出错: "
+                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
+            )
             return []
 
     def initialize_course(self, item_id: int) -> int:
@@ -523,6 +553,7 @@ class Course:
 
         logger.debug(f"初始化课程 ID - {item_id}")
         try:
+            resp = None
             # 构造 url 与请求体
             url = f"https://api.ulearning.cn/studyrecord/initialize/{item_id}"
             resp = self.client.get(url)
@@ -532,8 +563,11 @@ class Course:
             return int(resp.text)
 
         except Exception as e:
-            logger.error(f"初始化课程出错: {e}\n{format_exc()}")
-            raise
+            logger.error(
+                f"初始化课程出错: "
+                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
+            )
+            return -1
 
     def watch_video_behavior(
         self, class_id: int, textbook_id: int, chapter_id: int, video_id: int
@@ -542,6 +576,7 @@ class Course:
 
         logger.debug("上报视频观看行为")
         try:
+            resp = None
             url = "https://courseapi.ulearning.cn/behavior/watchVideo"
             payload = {
                 "classId": class_id,
@@ -557,7 +592,10 @@ class Course:
             return True
 
         except Exception as e:
-            logger.error(f"上报视频观看行为出错: {e}\n{format_exc()}")
+            logger.error(
+                f"上报视频观看行为出错: "
+                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
+            )
             return False
 
     def sync_course(
@@ -571,6 +609,7 @@ class Course:
         """上报学习状态"""
         logger.debug(f"上报学习状态 项目 ID - {item_id}")
         try:
+            resp = None
             url = "https://api.ulearning.cn/yws/api/personal/sync"
             params = {"courseType": 4, "platform": "PC"}
             payload = {
@@ -586,7 +625,7 @@ class Course:
             payload_text = json.dumps(payload, ensure_ascii=False).replace(" ", "")
             encrypted_text = self.sync_data_encrypt(payload_text)
 
-            resp = self.client.post(url=url, data=encrypted_text, params=params)
+            resp = self.client.post(url=url, content=encrypted_text, params=params)
             if resp.status_code != 200:
                 raise
 
@@ -597,16 +636,19 @@ class Course:
             return True
 
         except Exception as e:
-            logger.error(f"上报学习状态过程出错: {e}\n{format_exc()}")
+            logger.error(
+                f"上报学习状态过程出错: "
+                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
+            )
             return False
 
     @staticmethod
-    def sync_data_encrypt(data: str) -> str:
+    def sync_data_encrypt(text: str) -> str:
         """sync接口数据加密"""
 
         # 初始化密钥与文本
         key = b"12345678"
-        data = data.encode("utf-8")
+        data = text.encode("utf-8")
 
         # 创建 DES 加密对象
         cipher = DES.new(key, DES.MODE_ECB)
@@ -622,11 +664,11 @@ class Course:
         return encoded_text
 
     @staticmethod
-    def sync_data_decrypt(data: str) -> str:
+    def sync_data_decrypt(text: str) -> str:
         """sync接口解密"""
 
         key = b"12345678"
-        data = b64decode(data.encode("utf-8"))
+        data = b64decode(text.encode("utf-8"))
         cipher = DES.new(key, DES.MODE_ECB)
         decrypted_data = cipher.decrypt(data)
         unpadded_data = Padding.unpad(decrypted_data, DES.block_size)
@@ -643,6 +685,7 @@ class General:
         logger.debug("获取用户信息")
 
         try:
+            resp = None
             url = "https://api.ulearning.cn/user"
             resp = self.client.get(url)
             if resp.status_code != 200:
@@ -652,5 +695,8 @@ class General:
             return resp_json
 
         except Exception as e:
-            logger.error(f"获取用户信息失败: {e}\n{format_exc()}")
+            logger.error(
+                f"获取用户信息失败: "
+                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
+            )
             return {}

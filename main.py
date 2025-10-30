@@ -13,19 +13,20 @@ from utils import *
 class Main:
     def __init__(self):
         self.config: Config = Config.load()
-        self.client: Client = None
-        self.login_api: Login = None
+        self.client: Client
+        self.login_api: Login
         self.login_username: str = ""
-        self.choices = ["进入刷课", "切换账号", "开启 Debug 模式", "退出"]
+        self.choices = ["进入刷课", "切换账号", "切换 Debug 模式", "退出"]
         self.choices_map = {
             "进入刷课": self.entry_rush_course,
             "切换账号": self.switch_account,
-            "开启 Debug 模式": self.debug_mode,
+            "切换 Debug 模式": self.debug_mode,
             "退出": lambda: exit(0),
         }
+        set_logger(debug=self.config.debug)
 
     def menu(self):
-        while not self.login_api or not self.login_username:
+        while not hasattr(self, "login_api") or not hasattr(self, "login_username"):
             logger.info("请先登录")
             if not self.config.users:
                 self.add_account()
@@ -44,7 +45,7 @@ class Main:
                 [
                     inquirer.List(
                         "choice",
-                        message="请选择 (上下箭头 - 切换 | 空格 - 选中 | 回车 - 确认)",
+                        message="请选择 (上下箭头 - 切换 | 回车 - 确认)",
                         choices=self.choices,
                     )
                 ]
@@ -53,7 +54,7 @@ class Main:
 
     def create_client(self):
         logger.debug("创建 HTTP 客户端")
-        client = Client()
+        client = Client(verify=not self.config.debug)
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0",
             "Authorization": self.config.users[self.login_username]["token"],
@@ -81,7 +82,7 @@ class Main:
                     return False
                 time.sleep(2)
 
-        logger.info("登录成功")
+        logger.success("登录成功")
         self.login_username = username if username else self.login_username
         self.create_client()
 
@@ -121,7 +122,7 @@ class Main:
                 [
                     inquirer.List(
                         "username",
-                        message="请选择用户",
+                        message="请选择用户 (上下箭头 - 切换 | 回车 - 确认)",
                         choices=list(self.config.users.keys()) + ["添加新用户"],
                     )
                 ]
@@ -146,15 +147,36 @@ class Main:
 
     def debug_mode(self):
         logger.warning("请确保你知道 Debug 模式的作用再开启!")
-        if prompt(
+        choice = prompt(
             [
-                inquirer.Confirm(
-                    name="confirm", message="是否要开启 Debug 模式?", default=False
+                inquirer.List(
+                    name="choice",
+                    message="请选择 Debug 模式 (上下箭头 - 切换 | 回车 - 确认)",
+                    choices=["开启", "关闭", "取消"],
                 )
             ]
-        )["confirm"]:
+        )["choice"]
+        if (
+            choice == "开启"
+            and prompt(
+                [
+                    inquirer.Confirm(
+                        name="confirm", message="是否要开启 Debug 模式?", default=False
+                    )
+                ]
+            )["confirm"]
+        ):
+            self.config.debug = True
+            self.config.save()
             set_logger(True)
             logger.debug("开启 Debug 模式")
+
+        elif choice == "关闭":
+            self.config.debug = False
+            self.config.save()
+            set_logger(False)
+            logger.debug("关闭 Debug 模式")
+
         else:
             logger.info("取消")
 
@@ -171,31 +193,49 @@ class RushCourse:
             "清理已刷完课程",
             "退出刷课",
         ]
+        self.choices_map = {
+            "配置刷课": self.configure_courses,
+            "开始刷课": self.start_rush_course,
+            "查看刷课信息": self.print_courses,
+            "清理已刷完课程": self.prune_courses,
+            "退出刷课": lambda: None,
+            "解密": self.decrypt_text,
+        }
+
+        if self.config.debug:
+            self.choices.extend(["解密"])
 
     def menu(self):
-        while True:
-            choice = prompt(
-                [
-                    inquirer.List(
-                        name="choice",
-                        message="请选择 (上下箭头 - 切换 | 空格 - 选中 | 回车 - 确认)",
-                        choices=self.choices,
-                    )
-                ]
-            )["choice"]
-            if choice == "配置刷课":
-                self.configure_courses()
-            elif choice == "开始刷课":
-                self.course.start_rush_course(self.config.courses)
-            elif choice == "查看刷课信息":
-                self.print_courses()
-            elif choice == "清理已刷完课程":
-                self.prune_courses(refresh=True)
-            elif choice == "退出刷课":
-                return
+        try:
+            while True:
+                choice = prompt(
+                    [
+                        inquirer.List(
+                            name="choice",
+                            message="请选择 (上下箭头 - 切换 | 回车 - 确认)",
+                            choices=self.choices,
+                        )
+                    ]
+                )["choice"]
 
-    def prune_courses(self, refresh: bool = False):
+                if choice == "退出刷课":
+                    break
+
+                self.choices_map[choice]()
+
+        except KeyboardInterrupt as e:
+            logger.info("用户强制退出刷课")
+            return
+
+        except Exception as e:
+            logger.error(f"未知错误: {e}\n{format_exc()}")
+
+    def prune_courses(self, refresh: bool = True):
         logger.debug("清理已刷完课程")
+
+        if not self.config.courses:
+            logger.warning("未配置课程信息")
+            return
 
         if refresh:
             logger.info("重新获取学习记录信息")
@@ -250,6 +290,10 @@ class RushCourse:
     def print_courses(self):
         logger.debug("打印课程信息")
         courses = self.config.courses
+        if not courses:
+            logger.warning("未配置课程信息")
+            return
+
         for course_id, course_info in courses.items():
             logger.info(f'课程: "{course_info["name"]}"')
             textbooks: dict = course_info.get("textbooks", {})
@@ -279,6 +323,7 @@ class RushCourse:
             for course_id, course_info in courses.items()
         ]
         if not courses_choices:
+            logger.warning("未选择课程")
             return
 
         course_ids = prompt(
@@ -298,45 +343,90 @@ class RushCourse:
 
         logger.warning("若课件量较大, 获取信息可能需要较长时间, 请耐心等待...")
 
-        textbooks = {}
+        self.config.courses.clear()
+
         for course_id in course_ids:
             course_info[course_id] = courses[course_id]
             textbooks = self.course.get_textbooks(
                 course_id, courses[course_id]["class_id"]
             )
 
-        textbooks_choices = [
-            f"{textbook_id}: {textbook_info["name"]}"
-            for textbook_id, textbook_info in textbooks.items()
-        ]
-        if not textbooks_choices:
-            return
-
-        textbook_ids = prompt(
-            [
-                inquirer.Checkbox(
-                    name="textbook_ids",
-                    message="请选择要刷的教材 (上下箭头 - 切换 | 空格 - 选中 | 回车 - 确认)",
-                    choices=textbooks_choices,
-                )
+            textbooks_choices = [
+                f"{textbook_id}: {textbook_info["name"]}"
+                for textbook_id, textbook_info in textbooks.items()
             ]
-        )["textbook_ids"]
+            if not textbooks_choices:
+                logger.warning(f'"{courses[course_id]["name"]}" 无课件可选择')
+                continue
 
-        # 从选择中提取教材 ID
-        textbook_ids = [int(textbook_id.split(":")[0]) for textbook_id in textbook_ids]
+            textbook_ids = prompt(
+                [
+                    inquirer.Checkbox(
+                        name="textbook_ids",
+                        message="请选择要刷的教材 (上下箭头 - 切换 | 空格 - 选中 | 回车 - 确认)",
+                        choices=textbooks_choices,
+                    )
+                ]
+            )["textbook_ids"]
 
-        course_info[course_id]["textbooks"] = {}
-        for textbook_id in textbook_ids:
-            textbook_info = self.course.append_record_info(textbooks[textbook_id])
-            course_info[course_id]["textbooks"][textbook_id] = textbook_info
+            # 从选择中提取教材 ID
+            textbook_ids = [
+                int(textbook_id.split(":")[0]) for textbook_id in textbook_ids
+            ]
 
-        self.config.courses = course_info
-        self.config.save()
+            course_info[course_id]["textbooks"] = {}
+            for textbook_id in textbook_ids:
+                textbook_info = self.course.append_record_info(textbooks[textbook_id])
+                course_info[course_id]["textbooks"][textbook_id] = textbook_info
+
+            self.config.courses.update(course_info)
+            self.config.save()
 
         self.print_courses()
 
+    def decrypt_text(self):
+        encrypted_text = prompt(
+            [
+                inquirer.Text(
+                    "encrypted_text",
+                    message="请输入加密后的文本",
+                    validate=lambda _, x: len(x) > 0,
+                )
+            ]
+        )["encrypted_text"]
+        print(self.course.sync_data_decrypt(encrypted_text))
+
+    def start_rush_course(self):
+        try:
+            if not self.config.courses:
+                logger.warning("未配置课程信息")
+                return
+
+            self.course.start_rush_course(self.config.courses)
+            logger.success("刷课完成")
+
+        except Exception as e:
+            logger.error(f"刷课过程出错: {e}\n{format_exc()}")
+
 
 if __name__ == "__main__":
-    set_logger()
-    main = Main()
-    main.menu()
+    try:
+        set_logger()
+        main = Main()
+        main.menu()
+
+    except KeyboardInterrupt as e:
+        logger.info("用户强制退出")
+
+    except Exception as e:
+        logger.error(format_exc())
+
+    try:
+        logger.info("按回车键退出...")
+        input()
+
+    except KeyboardInterrupt:
+        pass
+
+    finally:
+        exit()
