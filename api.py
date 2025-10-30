@@ -30,8 +30,8 @@ class Login:
         """执行登录并获取 Token 和 用户信息"""
         logger.debug("执行登录并获取 Token 和 用户信息")
 
+        resp = None
         try:
-            resp = None
             url = "https://courseapi.ulearning.cn/users/login/v2"
             payload = {
                 "loginName": self.user_info["username"],
@@ -80,8 +80,8 @@ class Login:
         """检查 Token 是否有效"""
         logger.debug("检查 Token 是否有效")
 
+        resp = None
         try:
-            resp = None
             url = f"https://courseapi.ulearning.cn/users/isValidToken/{self.user_info["token"]}"
 
             resp = self.client.get(url)
@@ -108,8 +108,8 @@ class Course:
         """获取课程列表"""
         logger.debug("获取课程列表")
 
+        resp = None
         try:
-            resp = None
             # 构造 url 与请求体
             url = "https://courseapi.ulearning.cn/courses/students"
             payload = {
@@ -150,8 +150,8 @@ class Course:
         """获取教材列表"""
         logger.info(f"获取教材列表 课程 ID - {course_id} 班级 ID - {class_id}")
 
+        resp = None
         try:
-            resp = None
             # 构造 url 与请求体
             url = f"https://courseapi.ulearning.cn/textbook/student/{course_id}/list"
             payload = {
@@ -189,8 +189,8 @@ class Course:
         """获取章节列表"""
         logger.info(f"获取章节列表 教材 ID - {textbook_id} 班级 ID - {class_id}")
 
+        resp = None
         try:
-            resp = None
             # 构造 url 与请求体
             url = f"https://api.ulearning.cn/course/stu/{textbook_id}/directory"
             payload = {"classId": class_id}
@@ -219,7 +219,7 @@ class Course:
                             f'[项目][{item_id}] 未开启, 跳过 "{item["title"]}"'
                         )
                         continue
-                    
+
                     chapter_info["items"][item_id] = {
                         "name": item["title"],
                         "pages": {},
@@ -251,8 +251,8 @@ class Course:
         """获取项目列表"""
         logger.info(f"获取项目列表, 章节 ID - {chapter_id}")
 
+        resp = None
         try:
-            resp = None
             # 构造 url
             url = f"https://api.ulearning.cn/wholepage/chapter/stu/{chapter_id}"
 
@@ -287,7 +287,9 @@ class Course:
                             12: "content",
                         }
                         if element_type not in element_type_map:
-                            logger.error(f"未适配的类型 TypeID - {element_type}, 请提供日志以供适配")
+                            logger.error(
+                                f"未适配的类型 TypeID - {element_type}, 请提供日志以供适配"
+                            )
                             logger.debug(
                                 json.dumps(element, ensure_ascii=False, indent=2)
                             )
@@ -325,8 +327,8 @@ class Course:
         """获取学习记录信息"""
         logger.info(f"获取学习记录信息, 教材名 - {textbook_info["name"]}")
 
+        resp = None
         try:
-            resp = None
             # 构造 url 与请求体
             url = f"https://api.ulearning.cn/studyrecord/item"
             payload = {"courseType": 4}
@@ -533,8 +535,8 @@ class Course:
         """获取答案列表"""
         logger.info(f"获取答案列表 问题 ID - {question_id} 页面 ID - {parent_id}")
 
+        resp = None
         try:
-            resp = None
             # 构造 url 与请求体
             url = f"https://api.ulearning.cn/questionAnswer/{question_id}"
             payload = {"parentId": parent_id}
@@ -556,10 +558,10 @@ class Course:
 
     def initialize_course(self, item_id: int) -> int:
         """初始化课程"""
-
         logger.debug(f"初始化课程 ID - {item_id}")
+
+        resp = None
         try:
-            resp = None
             # 构造 url 与请求体
             url = f"https://api.ulearning.cn/studyrecord/initialize/{item_id}"
             resp = self.client.get(url)
@@ -579,10 +581,10 @@ class Course:
         self, class_id: int, textbook_id: int, chapter_id: int, video_id: int
     ) -> bool:
         """上报视频观看行为"""
-
         logger.debug("上报视频观看行为")
+
+        resp = None
         try:
-            resp = None
             url = "https://courseapi.ulearning.cn/behavior/watchVideo"
             payload = {
                 "classId": class_id,
@@ -614,8 +616,9 @@ class Course:
     ) -> bool:
         """上报学习状态"""
         logger.debug(f"上报学习状态 项目 ID - {item_id}")
+
+        resp = None
         try:
-            resp = None
             url = "https://api.ulearning.cn/yws/api/personal/sync"
             params = {"courseType": 4, "platform": "PC"}
             payload = {
@@ -690,8 +693,8 @@ class General:
         """获取用户信息"""
         logger.debug("获取用户信息")
 
+        resp = None
         try:
-            resp = None
             url = "https://api.ulearning.cn/user"
             resp = self.client.get(url)
             if resp.status_code != 200:

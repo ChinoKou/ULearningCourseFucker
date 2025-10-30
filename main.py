@@ -322,9 +322,6 @@ class RushCourse:
             f"{course_id}: {course_info["name"]}"
             for course_id, course_info in courses.items()
         ]
-        if not courses_choices:
-            logger.warning("未选择课程")
-            return
 
         course_ids = prompt(
             [
@@ -332,9 +329,14 @@ class RushCourse:
                     name="course_ids",
                     message="请选择要刷的课程 (上下箭头 - 切换 | 空格 - 选中 | 回车 - 确认)",
                     choices=courses_choices,
+                    validate=lambda _, x: x,  # type: ignore
                 )
             ]
         )["course_ids"]
+
+        if not course_ids:
+            logger.warning("未选择课程")
+            return
 
         # 从选择中提取课程 ID
         course_ids = [int(course_id.split(":")[0]) for course_id in course_ids]
@@ -344,6 +346,7 @@ class RushCourse:
         logger.warning("若课件量较大, 获取信息可能需要较长时间, 请耐心等待...")
 
         self.config.courses.clear()
+        self.config.save()
 
         for course_id in course_ids:
             course_info[course_id] = courses[course_id]
@@ -365,9 +368,14 @@ class RushCourse:
                         name="textbook_ids",
                         message="请选择要刷的教材 (上下箭头 - 切换 | 空格 - 选中 | 回车 - 确认)",
                         choices=textbooks_choices,
+                        validate=lambda _, x: x,  # type: ignore
                     )
                 ]
             )["textbook_ids"]
+
+            if not textbook_ids:
+                logger.warning(f"未选择教材")
+                continue
 
             # 从选择中提取教材 ID
             textbook_ids = [
@@ -412,6 +420,7 @@ class RushCourse:
 if __name__ == "__main__":
     try:
         set_logger()
+        logger.info("程序开源地址: https://github.com/ChinoKou/ULearningCourseFucker")
         main = Main()
         main.menu()
 
