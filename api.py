@@ -214,6 +214,12 @@ class Course:
                 item_info = self.get_item_info(chapter_nodeid)
                 for item in chapter["items"]:
                     item_id = item["itemid"]
+                    if item["hide"] == 1:
+                        logger.warning(
+                            f'[项目][{item_id}] 未开启, 跳过 "{item["title"]}"'
+                        )
+                        continue
+                    
                     chapter_info["items"][item_id] = {
                         "name": item["title"],
                         "pages": {},
