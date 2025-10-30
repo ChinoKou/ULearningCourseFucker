@@ -285,7 +285,7 @@ class Course:
                             logger.debug(
                                 json.dumps(element, ensure_ascii=False, indent=2)
                             )
-                            raise
+                            continue
 
                         page_info["type"] = element_type_map[element_type]
                         if element_type == 4:

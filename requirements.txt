@@ -2,5 +2,6 @@ loguru
 httpx
 pydantic
 inquirer
+py-machineid
 pycryptodome
 Crypto
