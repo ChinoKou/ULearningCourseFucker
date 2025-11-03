@@ -54,11 +54,17 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "Latest tag: $LATEST_TAG"
+          BRANCH="${{ github.ref_name }}"
+          LATEST_TAG=$(git tag -l "v*-${BRANCH}*" --sort=-version:refname | head -n 1)
+
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.0.0-${BRANCH}"
+          fi
+
+          echo "Latest tag for branch ${BRANCH}: $LATEST_TAG"
 
           LATEST_VERSION=${LATEST_TAG#v}
-          LATEST_VERSION=${LATEST_VERSION%-beta}
+          LATEST_VERSION=${LATEST_VERSION%%-*}
 
           if [ "${{ github.event.inputs.version_mode }}" = "manual" ]; then
             VERSION="${{ github.event.inputs.manual_version }}"
@@ -91,9 +97,9 @@ jobs:
           fi
 
           if [ "${{ github.event.inputs.release_type }}" = "beta" ]; then
-            TAG="v${VERSION}-beta"
+            TAG="v${VERSION}-${BRANCH}-beta"
           else
-            TAG="v${VERSION}"
+            TAG="v${VERSION}-${BRANCH}"
           fi
 
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
@@ -110,11 +116,11 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
-            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-linux
+            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-${{ github.ref_name }}-linux
             artifact_name: ULearningCourseFucker-linux
           - os: windows-latest
             platform: windows
-            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-windows.exe
+            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-${{ github.ref_name }}-windows.exe
             artifact_name: ULearningCourseFucker-windows
 
     steps:
@@ -131,22 +137,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install nuitka ordered-set zstandard
-          sudo apt-get update
-          sudo apt-get install -y ccache patchelf upx
+          pip install nuitka
+          sudo apt update
+          sudo apt install -y ccache
 
       - name: Install dependencies (Windows)
         if: matrix.platform == 'windows'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install nuitka ordered-set zstandard
-
-      - name: Install UPX (Windows)
-        if: matrix.platform == 'windows'
-        run: |
+          pip install nuitka
           choco install upx -y
-
           upx --version
 
       - name: Build with Nuitka (Linux)
@@ -166,7 +167,6 @@ jobs:
         if: matrix.platform == 'windows'
         run: |
           python -m nuitka `
-            --mingw64 `
             --standalone `
             --onefile `
             --assume-yes-for-downloads `
@@ -234,10 +234,11 @@ jobs:
 
             ### Version Info
             - Version: ${{ needs.prepare-version.outputs.version }}
+            - Branch: ${{ github.ref_name }}
             - Build Date: ${{ steps.build-time.outputs.time }}
 
           files: |
-            ./artifacts/ULearningCourseFucker-linux/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-linux
-            ./artifacts/ULearningCourseFucker-windows/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-windows.exe
+            ./artifacts/ULearningCourseFucker-linux/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-${{ github.ref_name }}-linux
+            ./artifacts/ULearningCourseFucker-windows/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-${{ github.ref_name }}-windows.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
