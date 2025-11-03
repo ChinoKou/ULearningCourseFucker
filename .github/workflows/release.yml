@@ -90,10 +90,12 @@ jobs:
             VERSION="${MAJOR}.${MINOR}.${PATCH}"
           fi
 
+          BRANCH="${{ github.ref_name }}"
+
           if [ "${{ github.event.inputs.release_type }}" = "beta" ]; then
-            TAG="v${VERSION}-beta"
+            TAG="v${VERSION}-${BRANCH}-beta"
           else
-            TAG="v${VERSION}"
+            TAG="v${VERSION}-${BRANCH}"
           fi
 
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
@@ -110,11 +112,11 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
-            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-linux
+            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-${{ github.ref_name }}-linux
             artifact_name: ULearningCourseFucker-linux
           - os: windows-latest
             platform: windows
-            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-windows.exe
+            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-${{ github.ref_name }}-windows.exe
             artifact_name: ULearningCourseFucker-windows
 
     steps:
@@ -234,10 +236,11 @@ jobs:
 
             ### Version Info
             - Version: ${{ needs.prepare-version.outputs.version }}
+            - Branch: ${{ github.ref_name }}
             - Build Date: ${{ steps.build-time.outputs.time }}
 
           files: |
-            ./artifacts/ULearningCourseFucker-linux/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-linux
-            ./artifacts/ULearningCourseFucker-windows/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-windows.exe
+            ./artifacts/ULearningCourseFucker-linux/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-${{ github.ref_name }}-linux
+            ./artifacts/ULearningCourseFucker-windows/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-${{ github.ref_name }}-windows.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
