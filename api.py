@@ -535,6 +535,8 @@ class Course:
         """获取答案列表"""
         logger.info(f"获取答案列表 问题 ID - {question_id} 页面 ID - {parent_id}")
 
+        time.sleep(random.uniform(0.08, 0.2))
+
         resp = None
         try:
             # 构造 url 与请求体
