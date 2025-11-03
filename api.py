@@ -32,7 +32,7 @@ class Login:
 
         resp = None
         try:
-            url = "https://courseapi.ulearning.cn/users/login/v2"
+            url = "https://lms.dgut.edu.cn/courseapi/users/login/v2"
             payload = {
                 "loginName": self.user_info["username"],
                 "password": self.user_info["password"],
@@ -82,7 +82,7 @@ class Login:
 
         resp = None
         try:
-            url = f"https://courseapi.ulearning.cn/users/isValidToken/{self.user_info["token"]}"
+            url = f"https://lms.dgut.edu.cn/courseapi/users/isValidToken/{self.user_info["token"]}"
 
             resp = self.client.get(url)
 
@@ -111,7 +111,7 @@ class Course:
         resp = None
         try:
             # 构造 url 与请求体
-            url = "https://courseapi.ulearning.cn/courses/students"
+            url = "https://lms.dgut.edu.cn/courseapi/courses/students"
             payload = {
                 "keyword": "",
                 "publishStatus": 1,
@@ -153,7 +153,7 @@ class Course:
         resp = None
         try:
             # 构造 url 与请求体
-            url = f"https://courseapi.ulearning.cn/textbook/student/{course_id}/list"
+            url = f"https://lms.dgut.edu.cn/courseapi/textbook/student/{course_id}/list"
             payload = {
                 "lang": "zh",  # 抓包的参数, 未知用处
             }
@@ -192,7 +192,7 @@ class Course:
         resp = None
         try:
             # 构造 url 与请求体
-            url = f"https://api.ulearning.cn/course/stu/{textbook_id}/directory"
+            url = f"https://ua.dgut.edu.cn/uaapi/course/stu/{textbook_id}/directory"
             payload = {"classId": class_id}
 
             resp = self.client.get(url, params=payload)
@@ -254,7 +254,7 @@ class Course:
         resp = None
         try:
             # 构造 url
-            url = f"https://api.ulearning.cn/wholepage/chapter/stu/{chapter_id}"
+            url = f"https://ua.dgut.edu.cn/uaapi/wholepage/chapter/stu/{chapter_id}"
 
             resp = self.client.get(url)
             if resp.status_code != 200:
@@ -330,7 +330,7 @@ class Course:
         resp = None
         try:
             # 构造 url 与请求体
-            url = f"https://api.ulearning.cn/studyrecord/item"
+            url = f"https://ua.dgut.edu.cn/uaapi/studyrecord/item"
             payload = {"courseType": 4}
 
             # 遍历章节
@@ -538,7 +538,7 @@ class Course:
         resp = None
         try:
             # 构造 url 与请求体
-            url = f"https://api.ulearning.cn/questionAnswer/{question_id}"
+            url = f"https://ua.dgut.edu.cn/uaapi/questionAnswer/{question_id}"
             payload = {"parentId": parent_id}
 
             resp = self.client.get(url=url, params=payload)
@@ -563,7 +563,7 @@ class Course:
         resp = None
         try:
             # 构造 url 与请求体
-            url = f"https://api.ulearning.cn/studyrecord/initialize/{item_id}"
+            url = f"https://ua.dgut.edu.cn/uaapi/studyrecord/initialize/{item_id}"
             resp = self.client.get(url)
             if resp.status_code != 200:
                 raise
@@ -585,7 +585,7 @@ class Course:
 
         resp = None
         try:
-            url = "https://courseapi.ulearning.cn/behavior/watchVideo"
+            url = "https://lms.dgut.edu.cn/courseapi/behavior/watchVideo"
             payload = {
                 "classId": class_id,
                 "courseId": textbook_id,
@@ -619,7 +619,7 @@ class Course:
 
         resp = None
         try:
-            url = "https://api.ulearning.cn/yws/api/personal/sync"
+            url = "https://ua.dgut.edu.cn/uaapi/yws/api/personal/sync"
             params = {"courseType": 4, "platform": "PC"}
             payload = {
                 "itemid": item_id,
@@ -695,7 +695,7 @@ class General:
 
         resp = None
         try:
-            url = "https://api.ulearning.cn/user"
+            url = "https://ua.dgut.edu.cn/uaapi/user"
             resp = self.client.get(url)
             if resp.status_code != 200:
                 raise
