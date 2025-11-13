@@ -16,19 +16,21 @@ class Main:
         self.client: Client
         self.login_api: Login
         self.login_username: str = ""
-        self.choices = ["进入刷课", "切换账号", "切换 Debug 模式", "退出"]
+        self.choices = ["进入刷课", "切换账号", "切换站点", "切换 Debug 模式", "退出"]
         self.choices_map = {
             "进入刷课": self.entry_rush_course,
             "切换账号": self.switch_account,
+            "切换站点": self.switch_site,
             "切换 Debug 模式": self.debug_mode,
             "退出": lambda: exit(0),
         }
         set_logger(debug=self.config.debug)
 
     def menu(self):
-        while not hasattr(self, "login_api") or not hasattr(self, "login_username"):
+        while not hasattr(self, "login_api") or not self.login_username:
             logger.info("请先登录")
             if not self.config.users:
+                self.switch_site()
                 self.add_account()
             else:
                 self.choose_account()
@@ -91,6 +93,7 @@ class Main:
     def add_account(self):
         logger.debug("添加账号")
         while True:
+            logger.info(f"当前站点: {self.config.site}")
             user_info = prompt(
                 [
                     inquirer.Text(
@@ -117,19 +120,26 @@ class Main:
 
     def choose_account(self):
         logger.debug("选择用户")
+
         while True:
+            logger.info(f"当前站点: {self.config.site}")
             username = prompt(
                 [
                     inquirer.List(
                         "username",
                         message="请选择用户 (上下箭头 - 切换 | 回车 - 确认)",
-                        choices=list(self.config.users.keys()) + ["添加新用户"],
+                        choices=list(self.config.users.keys())
+                        + ["添加新用户", "切换站点"],
                     )
                 ]
             )["username"]
 
             if username == "添加新用户":
                 return self.add_account()
+
+            if username == "切换站点":
+                self.switch_site()
+                return self.choose_account()
 
             login_status = self.force_login(username)
             if login_status:
@@ -180,16 +190,57 @@ class Main:
         else:
             logger.info("取消")
 
+    def switch_site(self):
+        logger.debug("切换站点")
+
+        sites = {
+            "主站": {"name": "ulearning", "url": "ulearning.cn"},
+            "东莞理工学院": {"name": "dgut", "url": "lms.dgut.edu.cn"},
+        }
+
+        while True:
+            choice_site = prompt(
+                [
+                    inquirer.List(
+                        name="site",
+                        message="请选择站点 (上下箭头 - 切换 | 回车 - 确认)",
+                        choices=[k for k, v in sites.items()],
+                    )
+                ]
+            )["site"]
+
+            site_info = sites[choice_site]
+            self.config.site = site_info["name"]
+            self.config.save()
+
+            if self.login_username:
+                if hasattr(self, "login_api"):
+                    delattr(self, "login_api")
+
+                login_status = self.force_login(self.login_username)
+                if login_status:
+                    break
+
+            else:
+                break
+
+            logger.warning("站点切换失败")
+
+        logger.info(
+            f"设置站点成功, 当前站点为 {site_info["name"]}, 站点地址为 {site_info["url"]}"
+        )
+
 
 class RushCourse:
     def __init__(self, config: Config, client: Client):
         self.config = config
         self.client = client
-        self.course = Course(client)
+        self.course = Course(config, client)
         self.choices = [
             "配置刷课",
             "开始刷课",
             "查看刷课信息",
+            "修改刷课上报时长",
             "清理已刷完课程",
             "退出刷课",
         ]
@@ -197,6 +248,7 @@ class RushCourse:
             "配置刷课": self.configure_courses,
             "开始刷课": self.start_rush_course,
             "查看刷课信息": self.print_courses,
+            "修改刷课上报时长": self.modify_study_time,
             "清理已刷完课程": self.prune_courses,
             "退出刷课": lambda: None,
             "解密": self.decrypt_text,
@@ -290,10 +342,12 @@ class RushCourse:
     def print_courses(self):
         logger.debug("打印课程信息")
         courses = self.config.courses
+        study_time = self.get_study_time()
         if not courses:
             logger.warning("未配置课程信息")
             return
 
+        logger.info("已配置课程信息:")
         for course_id, course_info in courses.items():
             logger.info(f'课程: "{course_info["name"]}"')
             textbooks: dict = course_info.get("textbooks", {})
@@ -309,9 +363,14 @@ class RushCourse:
                         for page_id, page_info in pages.items():
                             complete_status = page_info["is_complete"]
                             if complete_status:
-                                logger.info(f'       [✓] "{page_info["name"]}"')
+                                logger.info(f'       [✓] "{page_info["name"]}" (已刷完)')
                             else:
-                                logger.info(f'       [✕] "{page_info["name"]}"')
+                                logger.info(f'       [✕] "{page_info["name"]}" (未刷完)')
+
+        print("")
+        logger.info("已配置的刷课上报时长:")
+        for _study_time in study_time:
+            logger.info(_study_time)
 
     def configure_courses(self):
         logger.debug("配置课程")
@@ -405,6 +464,8 @@ class RushCourse:
         print(self.course.sync_data_decrypt(encrypted_text))
 
     def start_rush_course(self):
+        logger.debug("开始刷课")
+
         try:
             if not self.config.courses:
                 logger.warning("未配置课程信息")
@@ -415,6 +476,73 @@ class RushCourse:
 
         except Exception as e:
             logger.error(f"刷课过程出错: {e}\n{format_exc()}")
+
+    def get_study_time(self) -> list:
+        logger.debug("获取已配置的刷课上报时长")
+
+        name = {
+            "question": "题目",
+            "office": "PPT/Word/PDF",
+            "content": "文本",
+        }
+        current_study_time = self.config.study_time
+        return [
+            f"{key}-{name[key]} (当前值: {value["min"]}~{value["max"]} 秒)"
+            for key, value in current_study_time.items()
+        ]
+
+    def modify_study_time(self):
+        logger.debug("修改刷课上报时长")
+
+        while True:
+            type_choices = self.get_study_time() + ["返回"]
+
+            type_choice = prompt(
+                [
+                    inquirer.List(
+                        name="type_choice",
+                        message="请选择要修改的刷课上报时长类型 (上下箭头 - 切换 | 回车 - 确认)",
+                        choices=type_choices,
+                    )
+                ]
+            )["type_choice"]
+            if type_choice == "返回":
+                return
+
+            study_time = prompt(
+                [
+                    inquirer.Text(
+                        name="min",
+                        message="请输入 最小 上报时长 (单位: 秒)",
+                        validate=lambda _, x: x.isdigit(),
+                    ),
+                    inquirer.Text(
+                        name="max",
+                        message="请输入 最大 上报时长 (单位: 秒)",
+                        validate=lambda _, x: x.isdigit(),
+                    ),
+                ]
+            )
+            element_type = type_choice.split("-")[0]
+            element_name = type_choice.split("-")[1].split(" ")[0]
+
+            min_study_time = int(study_time["min"])
+            max_study_time = int(study_time["max"])
+            if min_study_time > max_study_time:
+                logger.warning(
+                    f"修改 {element_name} 的学习时长上报范围失败, 最小上报时长不能大于最大上报时长!"
+                )
+                continue
+
+            self.config.study_time[element_type] = {
+                "min": min_study_time,
+                "max": max_study_time,
+            }
+            self.config.save()
+
+            logger.info(
+                f"成功修改 {element_name} 的学习时长上报范围: {min_study_time}~{max_study_time} 秒"
+            )
 
 
 if __name__ == "__main__":
@@ -428,13 +556,13 @@ if __name__ == "__main__":
         logger.info("用户强制退出")
 
     except Exception as e:
-        logger.error(format_exc())
+        logger.error(f"程序出现未知错误: {e}\n{format_exc()}")
 
     try:
         logger.info("按回车键退出...")
         input()
 
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, EOFError):
         pass
 
     finally:

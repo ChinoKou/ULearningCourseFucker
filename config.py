@@ -16,6 +16,12 @@ class Config(BaseModel):
     debug: bool = False
     users: dict[str, dict[str, str]] = {}
     courses: dict = {}
+    site: str = "ulearning"
+    study_time: dict[str, dict[str, int]] = {
+        "question": {"min": 120, "max": 300},
+        "office": {"min": 120, "max": 300},
+        "content": {"min": 60, "max": 120},
+    }
 
     def save(self, config_name: str = "ulearning_config.yaml"):
         """保存配置信息到 YAML 文件"""

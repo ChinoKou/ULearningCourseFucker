@@ -2,6 +2,7 @@ import json
 import random
 import time
 from base64 import b64decode, b64encode
+from dataclasses import dataclass
 from traceback import format_exc
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
@@ -15,9 +16,33 @@ if TYPE_CHECKING:
     from .config import Config
 
 
+@dataclass
+class ApiUrl:
+    base_api: str
+    course_api: str
+    ua_api: str
+    __url_map = {
+        "ulearning": {
+            "base_api": "https://ulearning.cn",
+            "course_api": "https://courseapi.ulearning.cn",
+            "ua_api": "https://api.ulearning.cn",
+        },
+        "dgut": {
+            "base_api": "https://lms.dgut.edu.cn",
+            "course_api": "https://lms.dgut.edu.cn/courseapi",
+            "ua_api": "https://ua.dgut.edu.cn/uaapi",
+        },
+    }
+
+    @classmethod
+    def create(cls, site: str) -> "ApiUrl":
+        return cls(**cls.__url_map[site])
+
+
 class Login:
     def __init__(self, config: "Config", username: str):
         self.config = config
+        self.api = ApiUrl.create(config.site)
         self.user_info = config.users[username]
         self.token = ""
         self.client = Client(verify=not self.config.debug)
@@ -32,7 +57,7 @@ class Login:
 
         resp = None
         try:
-            url = "https://courseapi.ulearning.cn/users/login/v2"
+            url = f"{self.api.course_api}/users/login/v2"
             payload = {
                 "loginName": self.user_info["username"],
                 "password": self.user_info["password"],
@@ -82,7 +107,7 @@ class Login:
 
         resp = None
         try:
-            url = f"https://courseapi.ulearning.cn/users/isValidToken/{self.user_info["token"]}"
+            url = f"{self.api.course_api}/users/isValidToken/{self.user_info["token"]}"
 
             resp = self.client.get(url)
 
@@ -101,7 +126,9 @@ class Login:
 
 
 class Course:
-    def __init__(self, client: Client):
+    def __init__(self, config: "Config", client: Client):
+        self.config = config
+        self.api = ApiUrl.create(config.site)
         self.client = client
 
     def get_courses(self) -> dict:
@@ -111,7 +138,7 @@ class Course:
         resp = None
         try:
             # 构造 url 与请求体
-            url = "https://courseapi.ulearning.cn/courses/students"
+            url = f"{self.api.course_api}/courses/students"
             payload = {
                 "keyword": "",
                 "publishStatus": 1,
@@ -153,7 +180,7 @@ class Course:
         resp = None
         try:
             # 构造 url 与请求体
-            url = f"https://courseapi.ulearning.cn/textbook/student/{course_id}/list"
+            url = f"{self.api.course_api}/textbook/student/{course_id}/list"
             payload = {
                 "lang": "zh",  # 抓包的参数, 未知用处
             }
@@ -192,7 +219,7 @@ class Course:
         resp = None
         try:
             # 构造 url 与请求体
-            url = f"https://api.ulearning.cn/course/stu/{textbook_id}/directory"
+            url = f"{self.api.ua_api}/course/stu/{textbook_id}/directory"
             payload = {"classId": class_id}
 
             resp = self.client.get(url, params=payload)
@@ -254,7 +281,7 @@ class Course:
         resp = None
         try:
             # 构造 url
-            url = f"https://api.ulearning.cn/wholepage/chapter/stu/{chapter_id}"
+            url = f"{self.api.ua_api}/wholepage/chapter/stu/{chapter_id}"
 
             resp = self.client.get(url)
             if resp.status_code != 200:
@@ -283,12 +310,12 @@ class Course:
                         element_type_map = {
                             6: "question",
                             4: "video",
-                            10: "ppt",
+                            10: "office",
                             12: "content",
                         }
                         if element_type not in element_type_map:
                             logger.error(
-                                f"未适配的类型 TypeID - {element_type}, 请提供日志以供适配"
+                                f"未适配的类型 TypeID - {element_type}, 请提供日志文件以供适配"
                             )
                             logger.debug(
                                 json.dumps(element, ensure_ascii=False, indent=2)
@@ -330,7 +357,7 @@ class Course:
         resp = None
         try:
             # 构造 url 与请求体
-            url = f"https://api.ulearning.cn/studyrecord/item"
+            url = f"{self.api.ua_api}/studyrecord/item"
             payload = {"courseType": 4}
 
             # 遍历章节
@@ -381,7 +408,7 @@ class Course:
         """传入课程配置信息, 开始刷课"""
         logger.debug("开始刷课")
 
-        general_api = General(self.client)
+        general_api = General(self.config, self.client)
         user_info = general_api.get_user_info()
         if not user_info:
             logger.warning("无法获取用户信息, 无法启动刷课")
@@ -522,7 +549,10 @@ class Course:
 
             else:
                 score = 100
-                study_time = random.randint(120, 300)
+                config_study_time = self.config.study_time[element_type]
+                study_time = random.randint(
+                    config_study_time["min"], config_study_time["max"]
+                )
 
             study_record["score"] = score
             study_record["studyTime"] = study_time
@@ -540,7 +570,7 @@ class Course:
         resp = None
         try:
             # 构造 url 与请求体
-            url = f"https://api.ulearning.cn/questionAnswer/{question_id}"
+            url = f"{self.api.ua_api}/questionAnswer/{question_id}"
             payload = {"parentId": parent_id}
 
             resp = self.client.get(url=url, params=payload)
@@ -565,7 +595,7 @@ class Course:
         resp = None
         try:
             # 构造 url 与请求体
-            url = f"https://api.ulearning.cn/studyrecord/initialize/{item_id}"
+            url = f"{self.api.ua_api}/studyrecord/initialize/{item_id}"
             resp = self.client.get(url)
             if resp.status_code != 200:
                 raise
@@ -587,7 +617,7 @@ class Course:
 
         resp = None
         try:
-            url = "https://courseapi.ulearning.cn/behavior/watchVideo"
+            url = f"{self.api.course_api}/behavior/watchVideo"
             payload = {
                 "classId": class_id,
                 "courseId": textbook_id,
@@ -621,7 +651,7 @@ class Course:
 
         resp = None
         try:
-            url = "https://api.ulearning.cn/yws/api/personal/sync"
+            url = f"{self.api.ua_api}/yws/api/personal/sync"
             params = {"courseType": 4, "platform": "PC"}
             payload = {
                 "itemid": item_id,
@@ -688,7 +718,9 @@ class Course:
 
 
 class General:
-    def __init__(self, client: Client):
+    def __init__(self, config: "Config", client: Client):
+        self.config = config
+        self.api = ApiUrl.create(config.site)
         self.client = client
 
     def get_user_info(self) -> dict:
@@ -697,7 +729,7 @@ class General:
 
         resp = None
         try:
-            url = "https://api.ulearning.cn/user"
+            url = f"{self.api.ua_api}/user"
             resp = self.client.get(url)
             if resp.status_code != 200:
                 raise
