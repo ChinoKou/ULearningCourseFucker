@@ -54,17 +54,11 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          BRANCH="${{ github.ref_name }}"
-          LATEST_TAG=$(git tag -l "v*-${BRANCH}*" --sort=-version:refname | head -n 1)
-
-          if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="v0.0.0-${BRANCH}"
-          fi
-
-          echo "Latest tag for branch ${BRANCH}: $LATEST_TAG"
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
 
           LATEST_VERSION=${LATEST_TAG#v}
-          LATEST_VERSION=${LATEST_VERSION%%-*}
+          LATEST_VERSION=${LATEST_VERSION%-beta}
 
           if [ "${{ github.event.inputs.version_mode }}" = "manual" ]; then
             VERSION="${{ github.event.inputs.manual_version }}"
@@ -97,9 +91,9 @@ jobs:
           fi
 
           if [ "${{ github.event.inputs.release_type }}" = "beta" ]; then
-            TAG="v${VERSION}-${BRANCH}-beta"
+            TAG="v${VERSION}-beta"
           else
-            TAG="v${VERSION}-${BRANCH}"
+            TAG="v${VERSION}"
           fi
 
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
@@ -116,11 +110,11 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
-            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-${{ github.ref_name }}-linux
+            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-linux
             artifact_name: ULearningCourseFucker-linux
           - os: windows-latest
             platform: windows
-            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-${{ github.ref_name }}-windows.exe
+            output_name: ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-windows.exe
             artifact_name: ULearningCourseFucker-windows
 
     steps:
@@ -234,11 +228,10 @@ jobs:
 
             ### Version Info
             - Version: ${{ needs.prepare-version.outputs.version }}
-            - Branch: ${{ github.ref_name }}
             - Build Date: ${{ steps.build-time.outputs.time }}
 
           files: |
-            ./artifacts/ULearningCourseFucker-linux/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-${{ github.ref_name }}-linux
-            ./artifacts/ULearningCourseFucker-windows/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-${{ github.ref_name }}-windows.exe
+            ./artifacts/ULearningCourseFucker-linux/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-linux
+            ./artifacts/ULearningCourseFucker-windows/ULearningCourseFucker-v${{ needs.prepare-version.outputs.version }}-windows.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
