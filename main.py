@@ -118,6 +118,18 @@ class Main:
             if login_status:
                 break
 
+            is_switch_site = prompt(
+                [
+                    inquirer.Confirm(
+                        name="confirm",
+                        message="登录失败, 是否要切换站点?"
+                    )
+                ]
+            )["confirm"]
+
+            if is_switch_site:
+                self.switch_site()
+
     def choose_account(self):
         logger.debug("选择用户")
 
@@ -363,9 +375,13 @@ class RushCourse:
                         for page_id, page_info in pages.items():
                             complete_status = page_info["is_complete"]
                             if complete_status:
-                                logger.info(f'       [✓] "{page_info["name"]}" (已刷完)')
+                                logger.info(
+                                    f'       [✓] "{page_info["name"]}" (已刷完)'
+                                )
                             else:
-                                logger.info(f'       [✕] "{page_info["name"]}" (未刷完)')
+                                logger.info(
+                                    f'       [✕] "{page_info["name"]}" (未刷完)'
+                                )
 
         print("")
         logger.info("已配置的刷课上报时长:")
