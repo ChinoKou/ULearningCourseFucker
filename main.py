@@ -118,6 +118,7 @@ class Main:
             if login_status:
                 break
 
+            self.config.users.pop(user_info["username"])
             is_switch_site = prompt(
                 [
                     inquirer.Confirm(
