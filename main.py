@@ -16,10 +16,18 @@ class Main:
         self.client: Client
         self.login_api: Login
         self.login_username: str = ""
-        self.choices = ["进入刷课", "切换账号", "切换站点", "切换 Debug 模式", "退出"]
+        self.choices = [
+            "进入刷课",
+            "切换账号",
+            "删除账号",
+            "切换站点",
+            "切换 Debug 模式",
+            "退出",
+        ]
         self.choices_map = {
             "进入刷课": self.entry_rush_course,
             "切换账号": self.switch_account,
+            "删除账号": self.remove_account,
             "切换站点": self.switch_site,
             "切换 Debug 模式": self.debug_mode,
             "退出": lambda: exit(0),
@@ -120,12 +128,7 @@ class Main:
 
             self.config.users.pop(user_info["username"])
             is_switch_site = prompt(
-                [
-                    inquirer.Confirm(
-                        name="confirm",
-                        message="登录失败, 是否要切换站点?"
-                    )
-                ]
+                [inquirer.Confirm(name="confirm", message="登录失败, 是否要切换站点?")]
             )["confirm"]
 
             if is_switch_site:
@@ -159,9 +162,42 @@ class Main:
                 break
 
     def switch_account(self):
+        logger.debug("切换用户")
         self.choose_account()
         if self.config.courses:
             logger.warning("用户已切换, 已配置课程有可能会有出入")
+
+    def remove_account(self):
+        logger.debug("删除账号")
+        choices = list(self.config.users.keys()) + ["取消"]
+        choice = prompt(
+            [
+                inquirer.Checkbox(
+                    name="choice",
+                    message="请选择要删除的账号 (上下箭头 - 切换 | 空格 - 选中 | 回车 - 确认)",
+                    choices=choices,
+                    validate=lambda _, x: x,  # type: ignore
+                )
+            ]
+        )["choice"]
+
+        if "取消" in choice:
+            logger.info("取消删除")
+            return
+
+        if len(choice) == len(self.config.users):
+            logger.warning("不允许删除所有账号")
+            return self.remove_account()
+
+        for username in choice:
+            if username == self.login_username:
+                logger.warning(f"账号 {username} 删除失败, 不允许删除当前活跃账号")
+                continue
+
+            self.config.users.pop(username)
+            logger.info(f"已删除账号: {username}")
+
+        self.config.save()
 
     def entry_rush_course(self):
         logger.debug("进入刷课")
