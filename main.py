@@ -129,7 +129,6 @@ class Main:
             )["confirm"]
 
             if is_switch_site:
-                self.config.users.pop(user_info["username"])
                 self.switch_site()
 
     def choose_account(self):
