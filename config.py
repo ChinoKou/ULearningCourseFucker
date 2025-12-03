@@ -31,7 +31,7 @@ class Config(ConfigModel):
                     yaml.dump(encrypted_config, f, allow_unicode=True)
 
         except Exception as e:
-            logger.error(f"保存配置文件失败: {e}\n{format_exc()}")
+            logger.error(f"{format_exc()}\n保存配置文件失败: {e}")
 
     @classmethod
     def load(cls, config_name: str = "ulearning_config.yaml") -> "Config":
@@ -69,7 +69,7 @@ class Config(ConfigModel):
                 return cls.model_validate(config_dict)
 
         except Exception as e:
-            logger.error(f"加载配置文件失败, 重新生成配置文件: {e}\n{format_exc()}")
+            logger.error(f"{format_exc()}\n加载配置文件失败, 重新生成配置文件: {e}")
             if os.path.exists(config_name):
                 os.remove(config_name)
             return cls.load(config_name)
