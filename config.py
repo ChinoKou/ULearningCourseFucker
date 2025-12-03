@@ -33,6 +33,23 @@ class Config(ConfigModel):
         except Exception as e:
             logger.error(f"{format_exc()}\n保存配置文件失败: {e}")
 
+    def reload(self) -> bool:
+        """从 YAML 文件重新加载配置信息"""
+
+        try:
+            # 读取配置文件
+            new_config = self.load()
+
+            # 赋值
+            for field_name, field in Config.model_fields.items():
+                setattr(self, field_name, getattr(new_config, field_name))
+
+            return True
+
+        except Exception as e:
+            logger.error(f"{format_exc()}\n加载配置文件失败: {e}")
+            return False
+
     @classmethod
     def load(cls, config_name: str = "ulearning_config.yaml") -> "Config":
         """从 YAML 文件加载配置信息"""

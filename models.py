@@ -274,9 +274,9 @@ class StudyRecordAPIResponse(BaseModel):
     """未知ID"""
     customized: int
     activity_title: str
-    """段名 section_name"""
+    """节名 section_name"""
     item_id: int
-    """段ID = section_id"""
+    """节ID = section_id"""
     node_id: int
     """章节ID = chapter_id = nodeid"""
     score: int
@@ -294,7 +294,7 @@ class ChapterInfoAPIResponse(BaseModel):
     """
 
     class ItemDTO(BaseModel):
-        """段数据模型"""
+        """节数据模型"""
 
         class WholePageDTO(BaseModel):
             """页面数据模型"""

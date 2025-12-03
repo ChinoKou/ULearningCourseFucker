@@ -27,17 +27,36 @@ if TYPE_CHECKING:
 
 
 class LoginAPI:
+    """登录 API"""
+
     def __init__(self, username: str, config: "Config", client: "HttpClient") -> None:
+        """
+        登录 API初始化
+
+        :param username: 要登录的用户名
+        :type username: str
+        :param config: 配置对象
+        :type config: "Config"
+        :param client: 内部Http客户端对象
+        :type client: "HttpClient"
+        """
+
         self.user_config: UserConfig = config.users[username]
         self.config: Config = config
         self.client: "HttpClient" = client
         self.api: APIUrl = APIUrl.create(self.user_config.site)
 
     async def login(self) -> LoginAPIUserInfoResponse | None:
-        """执行登录并用户信息"""
+        """
+        执行登录并用户信息API
+
+        :return: 登录获取的用户信息API响应模型
+        :rtype: LoginAPIUserInfoResponse | None
+        """
         logger.debug("执行登录并获取用户信息")
 
         try:
+            # 构造 url 与请求体
             url = f"{self.api.course_api}/users/login/v2"
             payload = {
                 "loginName": self.user_config.username,
@@ -51,6 +70,7 @@ class LoginAPI:
                 logger.error(f"执行登录并用户信息时网络出错: HTTP {status_code}")
                 return None
 
+            # 解析数据
             USERINFO = resp.cookies.get("USERINFO", "")
 
             if not USERINFO:
@@ -66,10 +86,16 @@ class LoginAPI:
             return None
 
     async def check_login_status(self) -> bool:
-        """检查 Token 是否有效"""
+        """
+        检查Token是否有效
+        
+        :return: Token有效状态
+        :rtype: bool
+        """
         logger.debug("检查 Token 是否有效")
 
         try:
+            # 构造 url 与请求体
             url = f"{self.api.course_api}/users/isValidToken/{self.user_config.token}"
 
             resp = await self.client.get(url)
@@ -88,14 +114,33 @@ class LoginAPI:
 
 
 class CourseAPI:
-    def __init__(self, username: str, config: "Config", client: "HttpClient"):
+    """课程 API"""
+
+    def __init__(self, username: str, config: "Config", client: "HttpClient") -> None:
+        """
+        课程 API
+
+        :param username: 活跃的用户名
+        :type username: str
+        :param config: 配置对象
+        :type config: "Config"
+        :param client: 内部Http客户端对象
+        :type client: "HttpClient"
+        """
+
         self.user_config = config.users[username]
         self.config = config
         self.client = client
         self.api = APIUrl.create(self.user_config.site)
 
     async def get_courses(self) -> CourseListAPIResponse | None:
-        """获取课程列表"""
+        """
+        获取课程列表API
+
+        :param self: 说明
+        :return: 课程列表API响应数据模型
+        :rtype: CourseListAPIResponse | None
+        """
         logger.debug("获取课程列表")
 
         try:
@@ -128,7 +173,16 @@ class CourseAPI:
     async def get_textbooks(
         self, course_id: int, class_id: int
     ) -> TextbookListAPIResponse | None:
-        """获取教材列表"""
+        """
+        获取教材列表API
+
+        :param course_id: 课程ID
+        :type course_id: int
+        :param class_id: 你在该课程的班级ID
+        :type class_id: int
+        :return: 教材列表API响应数据模型
+        :rtype: TextbookListAPIResponse | None
+        """
         logger.info(f"获取教材列表 课程 ID - {course_id} 班级 ID - {class_id}")
 
         try:
@@ -155,7 +209,16 @@ class CourseAPI:
     async def get_textbook_info(
         self, textbook_id: int, class_id: int
     ) -> TextbookInfoAPIResponse | None:
-        """获取教材信息"""
+        """
+        获取教材信息API
+
+        :param textbook_id: 教材ID
+        :type textbook_id: int
+        :param class_id: 你在该教材对应的课程的班级ID
+        :type class_id: int
+        :return: 教材信息API响应数据模型
+        :rtype: TextbookInfoAPIResponse | None
+        """
         logger.info(f"获取教材信息 教材 ID - {textbook_id} 班级 ID - {class_id}")
 
         try:
@@ -178,7 +241,14 @@ class CourseAPI:
             return None
 
     async def get_chapter_info(self, chapter_id: int) -> ChapterInfoAPIResponse | None:
-        """获取章节信息"""
+        """
+        获取章节信息API
+
+        :param chapter_id: 章ID
+        :type chapter_id: int
+        :return: 章节信息API响应数据模型
+        :rtype: ChapterInfoAPIResponse | None
+        """
         logger.info(f"获取章节信息, 章节 ID - {chapter_id}")
 
         try:
@@ -202,8 +272,15 @@ class CourseAPI:
     async def get_study_record_info(
         self, section_id: int
     ) -> tuple[bool, StudyRecordAPIResponse | None]:
-        """获取学习记录信息"""
-        logger.info(f"获取学习记录信息, 段ID - {section_id}")
+        """
+        获取学习记录信息API
+
+        :param section_id: 节ID
+        :type section_id: int
+        :return: 学习记录API响应数据模型
+        :rtype: tuple[bool, StudyRecordAPIResponse | None]
+        """
+        logger.info(f"获取学习记录信息, 节ID - {section_id}")
 
         try:
             # 构造 url 与请求体
@@ -230,7 +307,16 @@ class CourseAPI:
     async def get_question_answer_list(
         self, question_id: int, parent_id: int
     ) -> QuestionAnswerAPIResponse | None:
-        """获取答案列表"""
+        """
+        获取答案列表API
+
+        :param question_id: 问题ID
+        :type question_id: int
+        :param parent_id: 父级页面ID
+        :type parent_id: int
+        :return: 问题答案API响应数据模型
+        :rtype: QuestionAnswerAPIResponse | None
+        """
         logger.info(f"获取答案列表 问题 ID - {question_id} 页面 ID - {parent_id}")
 
         try:
@@ -253,8 +339,15 @@ class CourseAPI:
             return None
 
     async def initialize_section(self, section_id: int) -> int | None:
-        """初始化课件-段"""
-        logger.debug(f"初始化课程 段ID - {section_id}")
+        """
+        初始化课件-节API
+
+        :param section_id: 节ID
+        :type section_id: int
+        :return: 开始刷该节的时间戳
+        :rtype: int | None
+        """
+        logger.debug(f"初始化课程 节ID - {section_id}")
 
         try:
             # 构造 url 与请求体
@@ -263,7 +356,7 @@ class CourseAPI:
             resp = await self.client.get(url)
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
-                logger.error(f"初始化课件-段时网络出错: HTTP {status_code}")
+                logger.error(f"初始化课件-节时网络出错: HTTP {status_code}")
                 return None
 
             return int(resp.text)
@@ -275,10 +368,24 @@ class CourseAPI:
     async def watch_video_behavior(
         self, class_id: int, textbook_id: int, chapter_id: int, video_id: int
     ) -> bool:
-        """上报视频观看行为"""
+        """
+        上报视频观看行为API
+
+        :param class_id: 你在该课程的班级的ID
+        :type class_id: int
+        :param textbook_id: 教材ID
+        :type textbook_id: int
+        :param chapter_id: 章ID
+        :type chapter_id: int
+        :param video_id: 视频ID
+        :type video_id: int
+        :return: 是否上报成功
+        :rtype: bool
+        """
         logger.debug("上报视频观看行为")
 
         try:
+            # 构造 url 与请求体
             url = f"{self.api.course_api}/behavior/watchVideo"
             payload = {
                 "classId": class_id,
@@ -304,10 +411,18 @@ class CourseAPI:
     async def sync_study_record(
         self, study_record_info: SyncStudyRecordAPIRequest
     ) -> bool:
-        """上报学习记录"""
-        logger.debug(f"上报学习记录 段ID - {study_record_info.itemid}")
+        """
+        上报学习记录API
+
+        :param study_record_info: 同步学习记录API请求数据模型
+        :type study_record_info: SyncStudyRecordAPIRequest
+        :return: 是否上报成功
+        :rtype: bool
+        """
+        logger.debug(f"上报学习记录 节ID - {study_record_info.itemid}")
 
         try:
+            # 构造 url 与请求体
             url = f"{self.api.ua_api}/yws/api/personal/sync"
             params = {"courseType": 4, "platform": "PC"}
             payload_text = study_record_info.model_dump_json().replace(" ", "")
@@ -333,17 +448,35 @@ class CourseAPI:
 
 
 class GeneralAPI:
-    def __init__(self, username: str, config: "Config", client: "HttpClient"):
+    """通用API"""
+
+    def __init__(self, username: str, config: "Config", client: "HttpClient") -> None:
+        """
+        通用API初始化
+        
+        :param username: 活跃的用户名
+        :type username: str
+        :param config: 配置对象
+        :type config: "Config"
+        :param client: 内部Http客户端对象
+        :type client: "HttpClient"
+        """
         self.user_config = config.users[username]
         self.config = config
         self.client = client
         self.api = APIUrl.create(self.user_config.site)
 
     async def get_user_info(self) -> GeneralAPIUserInfoAPIResponse | None:
-        """获取用户信息"""
+        """
+        获取用户信息API
+
+        :return: 获取用户信息API响应数据模型
+        :rtype: GeneralAPIUserInfoAPIResponse | None
+        """
         logger.debug("获取用户信息")
 
         try:
+            # 构造 url 与请求体
             url = f"{self.api.ua_api}/user"
             resp = await self.client.get(url)
             if not resp or resp.status_code != 200:

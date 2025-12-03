@@ -39,9 +39,22 @@ if TYPE_CHECKING:
 
 
 class HttpClient:
+    """内部Http客户端"""
+
     def __init__(
         self, token: str = "a", cookies: dict = {}, debug: bool = False
     ) -> None:
+        """
+        内部Http客户端初始化
+
+        :param token: 鉴权令牌
+        :type token: str
+        :param cookies: Cookie字典对象
+        :type cookies: dict
+        :param debug: 是否为调试模式
+        :type debug: bool
+        """
+
         self.debug = debug
         self.__client = httpx.AsyncClient(verify=not self.debug)
         headers = {
@@ -280,7 +293,16 @@ class HttpClient:
 
 
 class UserManager:
+    """用户管理类"""
+
     def __init__(self, config: "Config") -> None:
+        """
+        用户管理类初始化
+
+        :param config: 配置对象
+        :type config: "Config"
+        """
+
         self.config: "Config" = config
         self.active_client: HttpClient
         self.users: dict[str, UserAPI] = {}
@@ -292,6 +314,8 @@ class UserManager:
     async def menu(self) -> None:
         """用户管理菜单"""
         logger.debug("进入用户管理菜单")
+
+        # 初始化选项
         choices: list[str] = [
             "添加用户",
             "切换用户",
@@ -313,17 +337,6 @@ class UserManager:
 
         try:
             while True:
-                # retry = 0
-                # while not await self.check_login_status():
-                #     login_status = await self.refresh_login_status()
-                #     if login_status:
-                #         break
-                #     if retry >= 3:
-                #         logger.error("登录状态检查失败，请检查网络")
-                #         return
-
-                #     retry += 1
-
                 choice = await answer(questionary.select("请选择", choices=choices))
 
                 if choice == "返回":
@@ -340,7 +353,15 @@ class UserManager:
             return None
 
     async def __login(self, user_config: UserConfig) -> bool:
-        """登录"""
+        """
+        执行登录
+
+        :param user_config: 用户配置对象
+        :type user_config: UserConfig
+        :return: 是否登录成功
+        :rtype: bool
+
+        """
         logger.debug(f"登录用户: {user_config.username}")
 
         try:
@@ -365,10 +386,6 @@ class UserManager:
                 # 设置活跃用户和Http客户端
                 self.config.active_user = user_config.username
                 self.config.save()
-                # copy_client = http_client.copy_client()
-                # if not copy_client:
-                #     raise
-                # self.active_client = copy_client
                 self.active_client = http_client
 
                 # 设置用户API
@@ -384,34 +401,17 @@ class UserManager:
             if user_info_resp:
                 # 设置活跃用户和Http客户端
                 self.config.active_user = user_config.username
-                # copy_client = http_client.copy_client()
-                # if not copy_client:
-                #     raise
-                # self.active_client = copy_client
                 self.active_client = http_client
-
-                # # 创建用户信息
-                # user_info = UserInfo(
-                #     login_name=user_info_resp.loginName,
-                #     user_id=user_info_resp.userId,
-                #     token=user_info_resp.authorization,
-                #     student_id=user_info_resp.studentId,
-                #     name=user_info_resp.name,
-                # )
 
                 # 设置用户API
                 self.users[user_config.username] = UserAPI(
-                    user_config=user_config,
-                    login_api=login_api,
-                    # user_info=user_info,
+                    user_config=user_config, login_api=login_api
                 )
 
                 # 保存用户信息
                 cookies = http_client.get_cookies()
                 user_config.cookies = cookies
-                # user_config.token = user_info.token
                 user_config.token = user_info_resp.authorization
-                # self.config.users[user_config.username] = user_config
                 self.config.active_user = user_config.username
                 self.config.save()
 
@@ -591,28 +591,33 @@ class UserManager:
 
                     # 初始化属性选择
                     attr_choices = []
+                    accept_attrs = ["site", "password"]
+
+                    # 获取用户配置数据模型字段
                     for field_name, field_info in UserConfig.model_fields.items():
-                        if (
-                            field_name == "token"
-                            or field_name == "cookies"
-                            or field_name == "courses"
-                            or field_name == "username"
-                        ):
+                        # 忽略掉无法修改的属性
+                        if field_name not in accept_attrs:
                             continue
 
+                        # 获取字段值
                         field_value = getattr(user, field_name)
+
+                        # 密码脱敏
                         if field_name == "password":
                             field_value = (
                                 field_value[:2]
                                 + "*" * (len(field_value) - 4)
                                 + field_value[-2:]
                             )
+
+                        # 添加属性选择
                         attr_choices.append(
                             f"{field_name}: {field_info.title} (当前值: {field_value})"
                         )
+
                     attr_choices.append("返回")
 
-                    # 获取属性选择
+                    # 获取用户选择
                     attr: str = await answer(
                         questionary.select(
                             message="请选择要修改的属性",
@@ -622,9 +627,10 @@ class UserManager:
                     if attr == "返回":
                         break
 
+                    # 解析选择
                     attr_name = attr.split(":")[0].strip()
 
-                    # 获取属性值
+                    # 获取用户输入的新属性值
                     if attr_name == "site":
                         attr_value = await answer(
                             questionary.select(
@@ -647,14 +653,21 @@ class UserManager:
 
                     # 设置属性值
                     setattr(user, attr_name, attr_value)
+
+                    # 去除 token 和 cookies
                     user.token = "a"
                     user.cookies.clear()
 
+                    # 执行登录对修改进行校验
                     if await self.__login(user):
+                        # __login() 执行成功会自动保存配置信息
                         logger.success(f"成功修改属性 {attr_name} 的值")
+                        break
 
                     else:
                         logger.warning(f"修改属性 {attr_name} 的值失败")
+
+                        # 有很多地方引用了 user 对象, 这里需使用 setattr 恢复原始值
                         setattr(user, attr_name, getattr(raw_user_config, attr_name))
                         setattr(user, "token", getattr(raw_user_config, "token"))
                         setattr(user, "cookies", getattr(raw_user_config, "cookies"))
@@ -682,21 +695,29 @@ class UserManager:
         logger.debug("检查登录状态")
 
         try:
+            # 检查配置文件中的活跃用户是否存在于内存中的用户管理
             if self.config.active_user in self.users:
 
+                # 获取 LoginAPI 对象
                 login_api = self.users[self.config.active_user].login_api
                 if not login_api:
                     raise
 
+                # 检查登录状态
                 login_status = await login_api.check_login_status()
                 return login_status
 
+            # 配置文件中的活跃用户存在于配置文件中
             elif self.config.active_user in self.config.users:
+                # 执行登录
                 return await self.refresh_login_status()
 
+            # 配置文件不存在活跃用户
             elif not self.config.users:
+                # 全新启动, 添加用户
                 return await self.__add_user()
 
+            # 其他情况, 如活跃用户为空时
             else:
                 return await self.__switch_user()
 
@@ -722,16 +743,31 @@ class UserManager:
 
 
 class ConfigManager:
+    """配置管理类"""
+
     def __init__(self, config: "Config", client: HttpClient) -> None:
+        """
+        配置管理类初始化
+
+        :param config: 配置对象
+        :type config: "Config"
+        :param client: 内部Http客户端对象
+        :type client: HttpClient
+        """
+
         self.config = config
         self.client = client
 
     async def menu(self) -> None:
         """配置管理菜单"""
         logger.debug("配置管理菜单")
-        choices = ["修改调试模式", "返回"]
+
+        # 初始化选项
+        choices = ["修改调试模式", "重新读取配置文件", "重新写入配置文件", "返回"]
         choices_map = {
             "修改调试模式": self.__change_debug_mode,
+            "重新读取配置文件": self.__reload_config,
+            "重新写入配置文件": self.__rewrite_config,
             "返回": lambda: None,
         }
 
@@ -755,6 +791,7 @@ class ConfigManager:
         logger.debug("修改调试模式")
 
         try:
+            # 获取用户选择
             choice = await answer(
                 questionary.select(
                     message="请选择调试模式",
@@ -765,18 +802,28 @@ class ConfigManager:
                 return None
 
             if choice == "开启":
+                # 修改配置文件
                 self.config.debug = True
                 self.config.save()
+
+                # 修改日志输出
                 set_logger(True)
+
+                # 重新创建 HttpClient 内部的客户端
                 if not await self.client.re_create_client(debug=True):
                     raise
 
                 logger.success("已开启调试模式")
 
             elif choice == "关闭":
+                # 修改配置文件
                 self.config.debug = False
                 self.config.save()
+
+                # 修改日志输出
                 set_logger(False)
+
+                # 重新创建 HttpClient 内部的客户端
                 if not await self.client.re_create_client(debug=False):
                     raise
 
@@ -786,9 +833,50 @@ class ConfigManager:
             logger.error(f"{format_exc()}\n修改调试模式失败: {e}")
             return None
 
+    async def __reload_config(self) -> None:
+        """重新读取配置文件"""
+        logger.debug("重新读取配置文件")
+
+        try:
+            reload_status = self.config.reload()
+            if reload_status:
+                logger.success("已重新读取配置文件")
+
+            else:
+                logger.warning("重新读取配置文件失败")
+
+        except Exception as e:
+            logger.error(f"{format_exc()}\n重新读取配置文件失败: {e}")
+            return None
+
+    async def __rewrite_config(self) -> None:
+        """重新写入配置文件"""
+        logger.debug("重新写入配置文件")
+
+        try:
+            self.config.save()
+            logger.success("已重新写入配置文件")
+
+        except Exception as e:
+            logger.error(f"{format_exc()}\n重新写入配置文件失败: {e}")
+            return None
+
 
 class CourseManager:
+    """课程管理类"""
+
     def __init__(self, username: str, config: "Config", client: "HttpClient") -> None:
+        """
+        课程管理类初始化
+
+        :param username: 活跃用户名
+        :type username: str
+        :param config: 配置对象
+        :type config: "Config"
+        :param client: 内部Http客户端对象
+        :type client: "HttpClient"
+        """
+
         self.user_config = config.users[username]
         self.config = config
         self.client = client
@@ -799,6 +887,8 @@ class CourseManager:
     async def menu(self) -> None:
         """课程管理菜单"""
         logger.debug("课程管理菜单")
+
+        # 初始化选项
         choices: list[str] = [
             "课件配置",
             "开始刷课",
@@ -1108,23 +1198,31 @@ class CourseManager:
 
             # 创建引用
             courses = self.user_config.courses
+
+            # 遍历课程
             for course_id, course_info in courses.items():
                 # 创建引用
                 class_id = course_info.class_id
                 textbooks = course_info.textbooks
 
+                # 遍历教材
                 for textbook_id, textbook_info in textbooks.items():
                     # 创建引用
                     chapters = textbook_info.chapters
 
+                    # 遍历章
                     for chapter_id, chapter_info in chapters.items():
                         # 创建引用
                         sections = chapter_info.sections
 
+                        # 遍历节
                         for section_id, section_info in sections.items():
+                            # 初始化课件-节, 获取开始学习的时间戳
                             study_start_time = await self.course_api.initialize_section(
                                 section_id=section_id
                             )
+
+                            # 初始化失败
                             if not study_start_time:
                                 logger.warning(
                                     f"初始化节 '{section_info.section_name}' 失败, 跳过"
@@ -1134,14 +1232,21 @@ class CourseManager:
                             # 创建引用
                             pages = section_info.pages
 
+                            # 遍历页面
                             for page_id, page_info in pages.items():
+                                # 如果页面类型为视频
                                 if page_info.page_content_type == 6:
+                                    # 遍历所有元素
                                     for element_info in page_info.elements:
+
+                                        # 跳过非视频元素
                                         if not isinstance(element_info, ElementVideo):
                                             continue
 
+                                        # 创建引用
                                         video_id = element_info.video_id
 
+                                        # 上报视频观看行为, 疑似是用来前端防多开
                                         watch_status = (
                                             await self.course_api.watch_video_behavior(
                                                 class_id=class_id,
@@ -1157,8 +1262,10 @@ class CourseManager:
                                         else:
                                             logger.success(f"上报视频观看行为成功")
 
+                            # 为该 节 创建学习记录请求
                             retry = 0
                             while True:
+                                # 构造同步学习记录请求
                                 study_record_info = (
                                     self.data_manager.build_sync_study_record_request(
                                         study_start_time=study_start_time,
@@ -1168,21 +1275,26 @@ class CourseManager:
                                     )
                                 )
 
+                                # 构建失败
                                 if not study_record_info:
                                     logger.warning(f"构建请求信息失败, 跳过")
                                     break
 
+                                # 上报学习记录
                                 sync_status = await self.course_api.sync_study_record(
                                     study_record_info=study_record_info
                                 )
 
+                                # 重试过多
                                 if retry >= 3:
                                     logger.warning(f"尝试重试上报学习记录失败, 跳过")
                                     break
 
+                                # 上报失败
                                 if not sync_status:
                                     logger.warning(f"上报学习记录失败")
 
+                                # 上报成功
                                 else:
                                     logger.success(f"上报学习记录成功")
                                     break
