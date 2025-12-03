@@ -301,7 +301,9 @@ class CourseAPI:
             logger.error(f"{format_exc()}\n上报视频观看行为出错: {e}")
             return False
 
-    async def sync_study_record(self, study_record_info: SyncStudyRecordAPIRequest) -> bool:
+    async def sync_study_record(
+        self, study_record_info: SyncStudyRecordAPIRequest
+    ) -> bool:
         """上报学习记录"""
         logger.debug(f"上报学习记录 段ID - {study_record_info.itemid}")
 
@@ -350,7 +352,7 @@ class GeneralAPI:
                 return None
 
             resp_body = resp.json()
-            return resp_body
+            return GeneralAPIUserInfoAPIResponse(**resp_body)
 
         except Exception as e:
             logger.error(f"{format_exc()}\n获取用户信息时出错: {e}")
