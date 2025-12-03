@@ -932,6 +932,7 @@ class CourseManager:
         self, course_config: dict[int, ModelCourse]
     ) -> None:
         """获取教材详细信息, 章节信息, 节信息, 答案信息, 视频信息补全课程配置对象"""
+        logger.debug("补全课件信息")
 
         # 遍历课程
         for course_id, course_info in course_config.items():
@@ -1100,15 +1101,20 @@ class CourseManager:
 
                                         video_id = element_info.video_id
 
-                                        watch_status = await self.course_api.watch_video_behavior(
-                                            class_id=class_id,
-                                            textbook_id=textbook_id,
-                                            chapter_id=chapter_id,
-                                            video_id=video_id,
+                                        watch_status = (
+                                            await self.course_api.watch_video_behavior(
+                                                class_id=class_id,
+                                                textbook_id=textbook_id,
+                                                chapter_id=chapter_id,
+                                                video_id=video_id,
+                                            )
                                         )
 
                                         if not watch_status:
                                             logger.warning(f"上报视频观看行为失败")
+
+                                        else:
+                                            logger.success(f"上报视频观看行为成功")
 
                             retry = 0
                             while True:
@@ -1129,12 +1135,15 @@ class CourseManager:
                                     study_record_info=study_record_info
                                 )
 
-                                if not sync_status:
-                                    logger.warning(f"同步学习记录失败")
-                                    continue
-
                                 if retry >= 3:
-                                    logger.warning(f"尝试重试同步学习记录失败, 跳过")
+                                    logger.warning(f"尝试重试上报学习记录失败, 跳过")
+                                    break
+
+                                if not sync_status:
+                                    logger.warning(f"上报学习记录失败")
+
+                                else:
+                                    logger.success(f"上报学习记录成功")
                                     break
 
                                 retry += 1
@@ -1214,9 +1223,9 @@ class CourseManager:
 
     async def __decrypt_sync_study_record_request(self) -> None:
         """解密同步学习记录请求数据"""
+        logger.debug("解密同步学习记录请求数据")
 
         try:
-
             encrypted_text = await answer(
                 questionary.text(
                     "请输入: ", validate=lambda x: len(x) > 0 or "请输入内容"
@@ -1249,6 +1258,7 @@ class DataManager:
         :return: 解析是否成功
         :rtype: bool
         """
+        logger.debug("解析教材信息")
 
         try:
             # 创建引用
@@ -1326,6 +1336,7 @@ class DataManager:
         :return: 解析是否成功
         :rtype: bool
         """
+        logger.debug("解析章节信息")
 
         try:
             # 创建引用
@@ -1454,6 +1465,7 @@ class DataManager:
         :return: 解析是否成功
         :rtype: bool
         """
+        logger.debug(f"解析学习记录信息")
 
         try:
             # 创建引用
@@ -1503,6 +1515,7 @@ class DataManager:
         :return: 同步学习记录请求数据模型
         :rtype: SyncStudyRecordAPIRequest | None
         """
+        logger.debug(f"构造同步学习记录请求")
 
         try:
             PageStudyRecordDTO = SyncStudyRecordAPIRequest.PageStudyRecordDTO
