@@ -536,14 +536,17 @@ class UserManager:
                     questionary.select(
                         message="请选择用户",
                         choices=[k for k, v in self.config.users.items()]
-                        + ["添加新账号", "返回"],
+                        + ["添加新账号", "修改账号信息", "返回"],
                     )
                 )
 
                 if username == "添加新账号":
                     return await self.__add_user()
 
-                if username == "返回":
+                elif username == "修改账号信息":
+                    return await self.__modify_user()
+
+                elif username == "返回":
                     return False
 
                 user = self.config.users[username]
@@ -574,10 +577,18 @@ class UserManager:
                 if username == "返回":
                     break
 
-                # 获取 UserConfig 实例
-                user = self.config.users[username]
-
                 while True:
+                    # 获取 UserConfig 实例
+                    user = self.config.users[username]
+                    raw_user_config = UserConfig(
+                        site=user.site,
+                        username=user.username,
+                        password=user.password,
+                        token=user.token,
+                        cookies=user.cookies,
+                        courses=user.courses,
+                    )
+
                     # 初始化属性选择
                     attr_choices = []
                     for field_name, field_info in UserConfig.model_fields.items():
@@ -585,11 +596,19 @@ class UserManager:
                             field_name == "token"
                             or field_name == "cookies"
                             or field_name == "courses"
+                            or field_name == "username"
                         ):
                             continue
 
+                        field_value = getattr(user, field_name)
+                        if field_name == "password":
+                            field_value = (
+                                field_value[:2]
+                                + "*" * (len(field_value) - 4)
+                                + field_value[-2:]
+                            )
                         attr_choices.append(
-                            f"{field_name}: {field_info.title} (当前值: {getattr(user, field_name)})"
+                            f"{field_name}: {field_info.title} (当前值: {field_value})"
                         )
                     attr_choices.append("返回")
 
@@ -606,10 +625,25 @@ class UserManager:
                     attr_name = attr.split(":")[0].strip()
 
                     # 获取属性值
-                    attr_value = questionary.text(
-                        message=f"请输入属性 {attr_name} 的值",
-                        validate=lambda x: x or "属性值不可为空",
-                    )
+                    if attr_name == "site":
+                        attr_value = await answer(
+                            questionary.select(
+                                message="请选择站点",
+                                choices=[k for k, v in self.sites.items()],
+                            )
+                        )
+                        attr_value = self.sites[attr_value]["name"]
+
+                    elif attr_name == "password":
+                        attr_value = await answer(
+                            questionary.password(
+                                message=f"请输入属性 {attr_name} 的值",
+                                validate=lambda x: len(x) > 0 or "密码不可为空",
+                            )
+                        )
+
+                    else:
+                        raise
 
                     # 设置属性值
                     setattr(user, attr_name, attr_value)
@@ -617,7 +651,14 @@ class UserManager:
                     user.cookies.clear()
 
                     if await self.__login(user):
-                        logger.success(f"成功修改属性 {attr_name} 的值为 {attr_value}")
+                        logger.success(f"成功修改属性 {attr_name} 的值")
+
+                    else:
+                        logger.warning(f"修改属性 {attr_name} 的值失败")
+                        setattr(user, attr_name, getattr(raw_user_config, attr_name))
+                        setattr(user, "token", getattr(raw_user_config, "token"))
+                        setattr(user, "cookies", getattr(raw_user_config, "cookies"))
+                        self.config.save()
 
             return True
 
@@ -1161,34 +1202,49 @@ class CourseManager:
                 logger.warning("当前用户未配置课程")
                 return None
 
+            print("=" * 100)
             # 创建引用
             courses = self.user_config.courses
+
+            # 遍历课程
             for course_id, course_info in courses.items():
-                logger.info(f"课程: {course_info.course_name}")
+                logger.info(f"[课程][{course_id}] '{course_info.course_name}'")
 
                 # 创建引用
                 textbooks = course_info.textbooks
 
+                # 遍历教材
                 for textbook_id, textbook_info in textbooks.items():
-                    logger.info(f" 教材: {textbook_info.textbook_name}")
+                    logger.info(
+                        f" [教材][{textbook_id}] '{textbook_info.textbook_name}'"
+                    )
 
                     # 创建引用
                     chapters = textbook_info.chapters
 
+                    # 遍历章节
                     for chapter_id, chapter_info in chapters.items():
-                        logger.info(f"  章节: {chapter_info.chapter_name}")
+                        logger.info(f"   [章] '{chapter_info.chapter_name}'")
 
                         # 创建引用
                         sections = chapter_info.sections
 
+                        # 遍历节
                         for section_id, section_info in sections.items():
-                            logger.info(f"   节: {section_info.section_name}")
+                            logger.info(f"     [节] '{section_info.section_name}'")
 
                             # 创建引用
                             pages = section_info.pages
 
+                            # 遍历页面
                             for page_id, page_info in pages.items():
-                                logger.info(f"    页面: {page_info.page_name}")
+                                complete_status = (
+                                    "已刷完" if page_info.is_complete else "未完成"
+                                )
+                                logger.info(
+                                    f"       [{complete_status}] '{page_info.page_name}'"
+                                )
+            print("=" * 100)
 
         except Exception as e:
             logger.error(f"{format_exc()}\n查看刷课信息失败: {e}")
@@ -1199,7 +1255,73 @@ class CourseManager:
         logger.debug("修改刷课上报时长")
 
         try:
-            study_time = self.config.study_time
+            while True:
+                # 创建引用
+                study_time_config = self.config.study_time
+                config_type_choice_map = {
+                    "question": "题目类型",
+                    "document": "文档类型",
+                    "content": "纯文本类型",
+                }
+
+                # 创建选择项
+                config_type_choices = [
+                    f"[{k}] {config_type_choice_map[k]}, 当前值: {v["min"]}~{v["max"]} 秒"
+                    for k, v in study_time_config.model_dump().items()
+                ] + ["返回"]
+
+                # 获取用户选择
+                selected_type: str = await answer(
+                    questionary.select(
+                        message="请选择要修改的学习时长上报类型",
+                        choices=config_type_choices,
+                    )
+                )
+
+                # 返回
+                if selected_type == "返回":
+                    return None
+
+                # 解析用户选择
+                selected_type = selected_type.split("[")[1].split("]")[0].strip()
+
+                # 获取用户输入
+                min_time = await answer(
+                    questionary.text(
+                        message=f"请输入 '{config_type_choice_map[selected_type]}' 学习时长上报的最小时长 (秒)",
+                        default="180",
+                        validate=lambda x: x.isdigit()
+                        and 0 <= int(x) <= 3600
+                        or "请输入正确的数字(0~3600)",
+                    )
+                )
+
+                # 获取用户输入
+                max_time = await answer(
+                    questionary.text(
+                        message=f"请输入 '{config_type_choice_map[selected_type]}' 学习时长上报的最大时长 (秒)",
+                        default="360",
+                        validate=lambda x: x.isdigit()
+                        and int(min_time) <= int(x) <= 3600
+                        or f"请输入正确的数字({min_time}~3600)",
+                    )
+                )
+
+                # 获取对象
+                selected_study_minmax_time = getattr(study_time_config, selected_type)
+                if not isinstance(
+                    selected_study_minmax_time, ConfigModel.StudyTime.MinMaxTime
+                ):
+                    raise
+
+                # 保存学习时长上报
+                selected_study_minmax_time.min = int(min_time)
+                selected_study_minmax_time.max = int(max_time)
+                self.config.save()
+
+                logger.success(
+                    f"成功修改 '{config_type_choice_map[selected_type]}' 学习时长上报时长为 {min_time}~{max_time} 秒"
+                )
 
         except Exception as e:
             logger.error(f"{format_exc()}\n修改刷课上报时长失败: {e}")
@@ -1216,6 +1338,10 @@ class CourseManager:
 
             for course_id, course_info in dict(self.user_config.courses).items():
                 course_info.prune()
+                if not course_info.textbooks:
+                    self.user_config.courses.pop(course_id)
+
+            self.config.save()
 
         except Exception as e:
             logger.error(f"{format_exc()}\n清理已刷完课程失败: {e}")
@@ -1430,7 +1556,7 @@ class DataManager:
                                 # 初始化配置文件课件问题元素单个问题对象
                                 question = ElementQuestion.Question(
                                     question_id=question_id,
-                                    question_score=question_score,
+                                    question_score=int(question_score),
                                     question_content=question_content,
                                 )
                                 questions.append(question)
@@ -1518,57 +1644,66 @@ class DataManager:
         logger.debug(f"构造同步学习记录请求")
 
         try:
+            # 创建引用
             PageStudyRecordDTO = SyncStudyRecordAPIRequest.PageStudyRecordDTO
             VideoDTO = PageStudyRecordDTO.VideoDTO
             StartEndTime = VideoDTO.StartEndTime
             QuestionDTO = PageStudyRecordDTO.QuestionDTO
-
             section_id = section_info.section_id
-            study_time = 0
-            score = 0
+            pages = section_info.pages
+
+            # 初始化页面学习记录数据模型列表
             page_study_record_dto_list: list[
                 SyncStudyRecordAPIRequest.PageStudyRecordDTO
             ] = []
 
-            pages = section_info.pages
-
+            # 遍历该节下的所有页面信息
             for page_id, page_info in pages.items():
+                # 创建引用
                 page_content_type = page_info.page_content_type
+
+                # 初始化构造信息
+                page_study_time = 0
+                page_score = 0
                 page_study_record_dto_videos = []
                 page_study_record_dto_questions = []
 
                 # 类型为Doc/Content
                 if page_content_type == 5:
                     # 分数为100
-                    score = 100
+                    page_score = 100
 
                     # 获取元素数量
                     element_num = len(page_info.elements)
 
                     # 类型为Doc
                     if ElementDocumen in page_info.elements:
-                        study_time = (
+                        # 添加学习时长, 最大时长为3600秒
+                        page_study_time += min(
                             random.randint(
                                 study_time_config.document.min,
                                 study_time_config.document.max,
                             )
-                            * element_num
+                            * element_num,
+                            3600,
                         )
 
                     # 类型为Content
                     else:
-                        study_time = (
+                        # 添加学习时长, 最大时长为3600秒
+                        page_study_time += min(
                             random.randint(
                                 study_time_config.content.min,
                                 study_time_config.content.max,
                             )
-                            * element_num
+                            * element_num,
+                            3600,
                         )
 
                 # 类型为Video
                 elif page_content_type == 6:
                     # 分数为100
-                    score = 100
+                    page_score = 100
 
                     # 遍历所有元素
                     elements = page_info.elements
@@ -1577,20 +1712,31 @@ class DataManager:
                         if not isinstance(element, ElementVideo):
                             continue
 
+                        # 创建引用
                         video_id = element.video_id
                         video_length = element.video_length
 
-                        video_start_time = int(time.time())
+                        # 添加学习时长
+                        page_study_time += video_length
+
+                        # 获取视频开始时间戳(s)
+                        video_start_time = time.time()
+                        # 随机观看时长
+                        video_watch_time = video_length - random.uniform(2, 8)
+
+                        # 创建视频数据模型
                         page_study_record_dto_videos.append(
                             VideoDTO(
                                 videoid=video_id,
-                                current=video_length - random.uniform(1, 3),
-                                recordTime=video_length - random.randint(1, 3),
+                                current=video_watch_time,
+                                recordTime=int(video_watch_time),
                                 time=video_length,
                                 startEndTimeList=[
                                     StartEndTime(
                                         startTime=int(video_start_time),
-                                        endTime=video_start_time + video_length,
+                                        endTime=int(
+                                            video_start_time + video_watch_time
+                                        ),
                                     )
                                 ],
                             )
@@ -1598,6 +1744,14 @@ class DataManager:
 
                 # 类型为Question
                 elif page_content_type == 7:
+                    # 添加学习时长, 最大时长为3600秒
+                    page_study_time += min(
+                        random.randint(
+                            study_time_config.question.min,
+                            study_time_config.question.max,
+                        ),
+                        3600,
+                    )
 
                     # 遍历所有元素
                     elements = page_info.elements
@@ -1606,20 +1760,22 @@ class DataManager:
                         if not isinstance(element, ElementQuestion):
                             continue
 
+                        # 遍历所有题目
                         for question in element.questions:
+                            # 创建引用
                             question_id = question.question_id
                             answer_list = question.question_answer_list
                             question_score = question.question_score
 
-                            score += int(question_score)
+                            # 添加分数
+                            page_score += question_score
 
+                            # 创建题目数据模型
                             page_study_record_dto_questions.append(
                                 QuestionDTO(
                                     questionid=question_id,
                                     answerList=answer_list,
-                                    score=int(
-                                        question_score
-                                    ),  # ？？为什么API返回浮点数但是提交的是整数
+                                    score=question_score,
                                 )
                             )
 
@@ -1628,16 +1784,18 @@ class DataManager:
                     logger.warning(f"未知的页面类型: {page_content_type}")
                     continue
 
+                # 创建页面数据模型
                 page_study_record_dto_list.append(
                     PageStudyRecordDTO(
                         pageid=page_id,
-                        studyTime=study_time,
-                        score=score,
+                        studyTime=page_study_time,
+                        score=page_score,
                         videos=page_study_record_dto_videos,
                         questions=page_study_record_dto_questions,
                     )
                 )
 
+            # 创建同步学习记录API请求数据模型
             return SyncStudyRecordAPIRequest(
                 itemid=section_id,
                 studyStartTime=study_start_time,

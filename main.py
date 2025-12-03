@@ -39,8 +39,15 @@ class Main:
         logger.debug("进入主菜单")
 
         while True:
-            if not await self.user_manager.check_login_status():
-                continue
+            retry = 0
+            while not await self.user_manager.check_login_status():
+                if retry >= 3:
+                    logger.error("多次获取登录态失败, 尝试修改活跃用户")
+                    self.config.active_user = ""
+                    self.config.save()
+                    return await self.menu()
+                
+                retry += 1
 
             if not self.active_client:
                 self.active_client = await self.user_manager.get_client()
@@ -49,7 +56,7 @@ class Main:
 
             choice = await answer(
                 questionary.select(
-                    message="请选择 (上下箭头 - 切换 | 回车 - 确认)",
+                    message="请选择",
                     choices=self.choices,
                 )
             )

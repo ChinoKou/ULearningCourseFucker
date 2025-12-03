@@ -21,7 +21,7 @@ class ElementQuestion(BaseModel):
         """单个问题数据模型"""
 
         question_id: int
-        question_score: float
+        question_score: int
         question_content: str
         question_answer_list: list = Field(default_factory=list)
 
@@ -100,10 +100,6 @@ class ModelTextbook(BaseModel):
         """清理已刷完的章"""
         for chapter_id, chapter in dict(self.chapters).items():
             chapter.prune()
-
-    def prune_empty(self) -> None:
-        for chapter_id, chapter in dict(self.chapters).items():
-            chapter.prune()
             if not chapter.sections:
                 self.chapters.pop(chapter_id)
 
@@ -173,7 +169,7 @@ class SyncStudyRecordAPIRequest(BaseModel):
         complete: int = 1  # 1
         """完成状态 0: 未完成 1: 已完成"""
         studyTime: int
-        """学习时长"""
+        """学习时长(s)"""
         score: int
         """分数"""
         answerTime: int = 1  # 1
@@ -664,11 +660,11 @@ class APIUrl(BaseModel):
 class UserConfig(BaseModel):
     """用户配置信息数据模型"""
 
-    site: str
+    site: str = Field(title="站点")
     """站点"""
-    username: str
+    username: str = Field(title="用户名")
     """用户名"""
-    password: str
+    password: str = Field(title="密码")
     """密码"""
     token: str = "a"  # 占位
     """鉴权令牌"""
