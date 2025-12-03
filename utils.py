@@ -1,6 +1,5 @@
 import os
 from base64 import b64decode, b64encode
-from collections.abc import Coroutine
 from sys import stderr
 from time import localtime, strftime
 

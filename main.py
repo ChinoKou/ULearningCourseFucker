@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 from sys import exit
 from traceback import format_exc
 from typing import TYPE_CHECKING
@@ -19,13 +20,13 @@ class Main:
         self.config: Config = Config.load()
         self.active_client: "HttpClient | None" = None
         self.user_manager: UserManager = UserManager(self.config)
-        self.choices = [
+        self.choices: list[str] = [
             "进入课件管理",
             "进入账户管理",
             "进入配置管理",
             "退出",
         ]
-        self.choices_map = {
+        self.choices_map: dict[str, Callable] = {
             "进入课件管理": self.enter_course_manager,
             "进入账户管理": self.enter_user_manager,
             "进入配置管理": self.enter_config_manager,

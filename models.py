@@ -263,9 +263,9 @@ class StudyRecordAPIResponse(BaseModel):
         """学习时长"""
         answerTime: int
         """回答次数"""
-        videos: list[VideoDTO] | None
-        questions: list[QuestionDTO] | None
-        coursepageId: int | None
+        videos: list[VideoDTO] | None = None
+        questions: list[QuestionDTO] | None = None
+        coursepageId: int | None = None
         """与题目(questions)一起出现 为元素ID"""
 
     completion_status: int
@@ -358,7 +358,7 @@ class ChapterInfoAPIResponse(BaseModel):
 
                     questionid: int
                     """问题ID = question_id"""
-                    score: int
+                    score: float
                     """分数 = question_score"""
                     title: str
                     """问题名 = question_content"""
@@ -380,7 +380,7 @@ class ChapterInfoAPIResponse(BaseModel):
                     orgid: int
                     isShare: int
                     blankOrder: int
-                    choiceitemModels: list[choiceitemModel]
+                    choiceitemModels: list[choiceitemModel] | None = None
                     tagList: list
                     relatedTextbookChapterDTOList: list
 

@@ -1,6 +1,6 @@
 import asyncio
+import json
 import random
-import re
 import time
 from collections.abc import Callable
 from traceback import format_exc
@@ -32,7 +32,7 @@ from models import (
     UserAPI,
     UserConfig,
 )
-from utils import answer, set_logger
+from utils import answer, set_logger, sync_text_decrypt
 
 if TYPE_CHECKING:
     from config import Config
@@ -76,12 +76,13 @@ class HttpClient:
             return await self.__client.get(url, params=params, timeout=timeout)
 
         except httpx.TransportError as e:
-            logger.error(f"{format_exc()}\n网络错误: {e}")
+            logger.error(f"网络错误: {e}")
             if retry >= 3:
                 logger.error("请求重试次数过多")
                 return None
 
             await asyncio.sleep(0.5)
+            logger.info("正在重试...")
             return await self.get(url, params=params, timeout=timeout, retry=retry + 1)
 
         except Exception as e:
@@ -131,12 +132,13 @@ class HttpClient:
             )
 
         except httpx.TransportError as e:
-            logger.error(f"{format_exc()}\n网络错误: {e}")
+            logger.error(f"网络错误: {e}")
             if retry >= 3:
                 logger.error("请求重试次数过多")
                 return None
 
             await asyncio.sleep(0.5)
+            logger.info("正在重试...")
             return await self.post(
                 url=url,
                 content=content,
@@ -297,7 +299,7 @@ class UserManager:
             "修改用户信息",
             "刷新登录状态",
             "检查登录状态",
-            "退出用户管理",
+            "返回",
         ]
         choices_map: dict[str, Callable] = {
             "添加用户": self.__add_user,
@@ -306,7 +308,7 @@ class UserManager:
             "修改用户信息": self.__modify_user,
             "刷新登录状态": self.refresh_login_status,
             "检查登录状态": self.check_login_status,
-            "退出用户管理": lambda: None,
+            "返回": lambda: None,
         }
 
         try:
@@ -324,7 +326,7 @@ class UserManager:
 
                 choice = await answer(questionary.select("请选择", choices=choices))
 
-                if choice == "退出用户管理":
+                if choice == "返回":
                     return None
 
                 await choices_map[choice]()
@@ -770,8 +772,12 @@ class CourseManager:
             "查看刷课信息": self.__print_course_ware_info,
             "修改刷课上报时长": self.__modify_study_time,
             "清理已刷完课程": self.__prune_empty_course_ware,
+            "解密同步学习记录请求数据": self.__decrypt_sync_study_record_request,
             "返回": lambda: None,
         }
+
+        if self.config.debug:
+            choices.append("解密同步学习记录请求数据")
 
         try:
             while True:
@@ -820,7 +826,7 @@ class CourseManager:
 
             # 解析选择的课程为课程ID列表
             selected_course_ids = [
-                int(course_id.split(".")[0].strip())
+                int(course_id.split("]")[0].split("[")[1].strip())
                 for course_id in raw_selected_course_ids
             ]
 
@@ -1143,6 +1149,25 @@ class CourseManager:
             logger.error(f"{format_exc()}\n清理已刷完课程失败: {e}")
             return None
 
+    async def __decrypt_sync_study_record_request(self) -> None:
+        """解密同步学习记录请求数据"""
+
+        try:
+
+            encrypted_text = await answer(
+                questionary.text(
+                    "请输入: ", validate=lambda x: len(x) > 0 or "请输入内容"
+                )
+            )
+
+            decrypted_text = sync_text_decrypt(encrypted_text)
+            logger.info(
+                json.dumps(json.loads(decrypted_text), indent=4, ensure_ascii=False)
+            )
+
+        except Exception as e:
+            logger.error(f"{format_exc()}\n解密同步学习记录请求数据失败: {e}")
+
 
 class DataManager:
     def __init__(self) -> None:
@@ -1213,6 +1238,7 @@ class DataManager:
                             page_content_type=page_content_type,
                         )
 
+            logger.debug("教材信息解析成功")
             return True
 
         except Exception as e:
@@ -1253,6 +1279,9 @@ class DataManager:
             for section_info in chapter_info.wholepageItemDTOList:
                 # 创建引用
                 section_id = section_info.itemid
+                if section_id not in course_config_sections:
+                    continue
+
                 course_config_pages = course_config_sections[section_id].pages
 
                 # 遍历该节下的所有页面列表信息
@@ -1337,6 +1366,7 @@ class DataManager:
                                 ElementQuestion(questions=questions)
                             )
 
+            logger.debug(f"解析章节信息成功")
             return True
 
         except Exception as e:
@@ -1382,6 +1412,7 @@ class DataManager:
                         # 设置页面完成状态
                         course_page_info.is_complete = bool(page_is_complete)
 
+            logger.debug(f"解析学习记录信息成功")
             return True
 
         except Exception as e:
@@ -1504,11 +1535,15 @@ class DataManager:
                             answer_list = question.question_answer_list
                             question_score = question.question_score
 
+                            score += int(question_score)
+
                             page_study_record_dto_questions.append(
                                 QuestionDTO(
                                     questionid=question_id,
                                     answerList=answer_list,
-                                    score=question_score,
+                                    score=int(
+                                        question_score
+                                    ),  # ？？为什么API返回浮点数但是提交的是整数
                                 )
                             )
 
