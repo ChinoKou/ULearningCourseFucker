@@ -2,6 +2,6 @@ httpx
 loguru
 pyyaml
 pydantic
-inquirer
 py-machineid
 pycryptodome
+questionary

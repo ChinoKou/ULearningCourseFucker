@@ -1,141 +1,103 @@
 import json
-import random
-import time
-from base64 import b64decode, b64encode
-from dataclasses import dataclass
 from traceback import format_exc
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
-from Crypto.Cipher import DES
-from Crypto.Util import Padding
-from httpx import Client
 from loguru import logger
 
+from config import Config
+from models import (
+    APIUrl,
+    ChapterInfoAPIResponse,
+    CourseListAPIResponse,
+    GeneralAPIUserInfoAPIResponse,
+    LoginAPIUserInfoResponse,
+    QuestionAnswerAPIResponse,
+    StudyRecordAPIResponse,
+    SyncStudyRecordAPIRequest,
+    TextbookInfoAPIResponse,
+    TextbookListAPIResponse,
+    UserConfig,
+)
+from utils import sync_text_encrypt
+
 if TYPE_CHECKING:
-    from .config import Config
+    from config import Config
+    from services import HttpClient
 
 
-@dataclass
-class ApiUrl:
-    base_api: str
-    course_api: str
-    ua_api: str
-    __url_map = {
-        "ulearning": {
-            "base_api": "https://ulearning.cn",
-            "course_api": "https://courseapi.ulearning.cn",
-            "ua_api": "https://api.ulearning.cn",
-        },
-        "dgut": {
-            "base_api": "https://lms.dgut.edu.cn",
-            "course_api": "https://lms.dgut.edu.cn/courseapi",
-            "ua_api": "https://ua.dgut.edu.cn/uaapi",
-        },
-    }
+class LoginAPI:
+    def __init__(self, username: str, config: "Config", client: "HttpClient") -> None:
+        self.user_config: UserConfig = config.users[username]
+        self.config: Config = config
+        self.client: "HttpClient" = client
+        self.api: APIUrl = APIUrl.create(self.user_config.site)
 
-    @classmethod
-    def create(cls, site: str) -> "ApiUrl":
-        return cls(**cls.__url_map[site])
+    async def login(self) -> LoginAPIUserInfoResponse | None:
+        """执行登录并用户信息"""
+        logger.debug("执行登录并获取用户信息")
 
-
-class Login:
-    def __init__(self, config: "Config", username: str):
-        self.config = config
-        self.api = ApiUrl.create(config.site)
-        self.user_info = config.users[username]
-        self.token = ""
-        self.client = Client(verify=not self.config.debug)
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0"
-        }
-        self.client.headers.update(headers)
-
-    def login(self) -> dict:
-        """执行登录并获取 Token 和 用户信息"""
-        logger.debug("执行登录并获取 Token 和 用户信息")
-
-        resp = None
         try:
             url = f"{self.api.course_api}/users/login/v2"
             payload = {
-                "loginName": self.user_info["username"],
-                "password": self.user_info["password"],
+                "loginName": self.user_config.username,
+                "password": self.user_config.password,
             }
 
-            resp = self.client.post(url=url, data=payload)
+            resp = await self.client.post(url=url, data=payload)
 
-            if resp.status_code != 302:
-                raise
+            if not resp or resp.status_code != 302:
+                status_code = resp.status_code if resp else None
+                logger.error(f"执行登录并用户信息时网络出错: HTTP {status_code}")
+                return None
 
             USERINFO = resp.cookies.get("USERINFO", "")
 
             if not USERINFO:
-                return {}
+                return None
 
             # URL 解码
             user_info = json.loads(unquote(USERINFO))
 
-            # 获取 Token
-            token = user_info.get("authorization", None)
-
-            if not token:
-                return {}
-
-            # 更新 headers
-            headers = {"Authorization": token}
-            self.client.headers.update(headers)
-
-            # 更新 config
-            self.config.users[self.user_info["username"]]["token"] = token
-            self.config.save()
-
-            return user_info
-
-            # other info...
+            return LoginAPIUserInfoResponse(**user_info)
 
         except Exception as e:
-            logger.error(
-                f"执行登录并获取 Token 和 用户信息时发生错误: "
-                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
-            )
-            return {}
+            logger.error(f"{format_exc()}\n执行登录并用户信息时发生错误: {e}")
+            return None
 
-    def check_login_status(self) -> bool:
+    async def check_login_status(self) -> bool:
         """检查 Token 是否有效"""
         logger.debug("检查 Token 是否有效")
 
-        resp = None
         try:
-            url = f"{self.api.course_api}/users/isValidToken/{self.user_info["token"]}"
+            url = f"{self.api.course_api}/users/isValidToken/{self.user_config.token}"
 
-            resp = self.client.get(url)
+            resp = await self.client.get(url)
 
-            if resp.status_code != 200:
+            if not resp or resp.status_code != 200:
+                status_code = resp.status_code if resp else None
+                logger.error(f"检查 Token 是否有效时网络出错: HTTP {status_code}")
                 raise
 
             # 检查接口返回值
             return resp.text.strip().lower() == "true"
 
         except Exception as e:
-            logger.error(
-                f"检查登录状态时发生错误: "
-                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
-            )
+            logger.error(f"{format_exc()}\n检查 Token 是否有效时发生错误: {e}")
             return False
 
 
-class Course:
-    def __init__(self, config: "Config", client: Client):
+class CourseAPI:
+    def __init__(self, username: str, config: "Config", client: "HttpClient"):
+        self.user_config = config.users[username]
         self.config = config
-        self.api = ApiUrl.create(config.site)
         self.client = client
+        self.api = APIUrl.create(self.user_config.site)
 
-    def get_courses(self) -> dict:
+    async def get_courses(self) -> CourseListAPIResponse | None:
         """获取课程列表"""
         logger.debug("获取课程列表")
 
-        resp = None
         try:
             # 构造 url 与请求体
             url = f"{self.api.course_api}/courses/students"
@@ -143,41 +105,32 @@ class Course:
                 "keyword": "",
                 "publishStatus": 1,
                 "type": 1,
-                "pn": 1,
-                "ps": 999,
+                "pn": 1,  # page_number
+                "ps": 999,  # page_size
                 "lang": "zh",
             }
 
-            resp = self.client.get(url=url, params=payload)
+            resp = await self.client.get(url=url, params=payload)
 
-            if resp.status_code != 200:
-                raise
+            if not resp or resp.status_code != 200:
+                status_code = resp.status_code if resp else None
+                logger.error(f"获取课程列表时网络出错: HTTP {status_code}")
+                return None
 
             # 解析数据
-            resp_json = resp.json()
-            courses = {}
-            course_list = resp_json.get("courseList")
-            for course in course_list:
-                courses[course["id"]] = {
-                    "name": course["name"],
-                    "class_id": course["classId"],
-                    "class_user_id": course["classUserId"],
-                }
-
-            return courses
+            resp_body: dict = resp.json()
+            return CourseListAPIResponse(**resp_body)
 
         except Exception as e:
-            logger.error(
-                f"获取课程列表出错: "
-                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
-            )
-            return {}
+            logger.error(f"{format_exc()}\n获取课程列表时出错: {e}")
+            return None
 
-    def get_textbooks(self, course_id: int, class_id: int) -> dict:
+    async def get_textbooks(
+        self, course_id: int, class_id: int
+    ) -> TextbookListAPIResponse | None:
         """获取教材列表"""
         logger.info(f"获取教材列表 课程 ID - {course_id} 班级 ID - {class_id}")
 
-        resp = None
         try:
             # 构造 url 与请求体
             url = f"{self.api.course_api}/textbook/student/{course_id}/list"
@@ -185,437 +138,146 @@ class Course:
                 "lang": "zh",  # 抓包的参数, 未知用处
             }
 
-            resp = self.client.get(url, params=payload)
-            if resp.status_code != 200:
-                raise
+            resp = await self.client.get(url, params=payload)
+            if not resp or resp.status_code != 200:
+                status_code = resp.status_code if resp else None
+                logger.error(f"获取教材列表时网络出错: HTTP {status_code}")
+                return None
 
             # 解析数据
-            resp_data = resp.json()
-
-            textbooks = {}
-            for textbook in resp_data:
-                textbook_id = textbook["courseId"]
-                textbooks[textbook_id] = {
-                    "name": textbook["name"],
-                    "type": textbook["type"],
-                    "status": textbook["status"],
-                    "limit": textbook["limit"],
-                    "chapters": self.get_chapters(textbook_id, class_id),
-                }
-
-            return textbooks
+            resp_body = resp.json()
+            return TextbookListAPIResponse.create(resp=resp_body)
 
         except Exception as e:
-            logger.error(
-                f"获取教材列表出错: "
-                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
-            )
-            return {}
+            logger.error(f"{format_exc()}\n获取教材列表时出错: {e}")
+            return None
 
-    def get_chapters(self, textbook_id: int, class_id: int) -> dict:
-        """获取章节列表"""
-        logger.info(f"获取章节列表 教材 ID - {textbook_id} 班级 ID - {class_id}")
+    async def get_textbook_info(
+        self, textbook_id: int, class_id: int
+    ) -> TextbookInfoAPIResponse | None:
+        """获取教材信息"""
+        logger.info(f"获取教材信息 教材 ID - {textbook_id} 班级 ID - {class_id}")
 
-        resp = None
         try:
             # 构造 url 与请求体
             url = f"{self.api.ua_api}/course/stu/{textbook_id}/directory"
             payload = {"classId": class_id}
 
-            resp = self.client.get(url, params=payload)
-            if resp.status_code != 200:
-                raise
+            resp = await self.client.get(url, params=payload)
+            if not resp or resp.status_code != 200:
+                status_code = resp.status_code if resp else None
+                logger.error(f"获取教材信息时网络出错: HTTP {status_code}")
+                return None
 
             # 解析数据
-            resp_json = resp.json()
-            chapters = resp_json.get("chapters")
-            chapter_list = {}
-            for chapter in chapters:
-                chapter_nodeid = chapter["nodeid"]
-                chapter_list[chapter_nodeid] = {
-                    "name": chapter["nodetitle"],
-                    "items": {},
-                }
-                chapter_info = chapter_list[chapter_nodeid]
-
-                item_info = self.get_item_info(chapter_nodeid)
-                for item in chapter["items"]:
-                    item_id = item["itemid"]
-                    if item["hide"] == 1:
-                        logger.warning(
-                            f'[项目][{item_id}] 未开启, 跳过 "{item["title"]}"'
-                        )
-                        continue
-
-                    chapter_info["items"][item_id] = {
-                        "name": item["title"],
-                        "pages": {},
-                    }
-                    for page in item["coursepages"]:
-                        page_id = page["id"]
-                        element_info = (
-                            item_info[item_id]["pages"][page_id] if item_info else {}
-                        )
-
-                        chapter_info["items"][item_id]["pages"][page_id] = {
-                            "relation_id": page["relationid"],
-                            "name": page["title"],
-                            "content_type": page["contentType"],
-                            "is_complete": False,
-                            "element_info": element_info,
-                        }
-
-            return chapter_list
+            resp_body = resp.json()
+            return TextbookInfoAPIResponse(**resp_body)
 
         except Exception as e:
-            logger.error(
-                f"获取章节列表出错: "
-                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
-            )
-            return {}
+            logger.error(f"{format_exc()}\n获取教材信息时出错: {e}")
+            return None
 
-    def get_item_info(self, chapter_id: int) -> dict:
-        """获取项目列表"""
-        logger.info(f"获取项目列表, 章节 ID - {chapter_id}")
+    async def get_chapter_info(self, chapter_id: int) -> ChapterInfoAPIResponse | None:
+        """获取章节信息"""
+        logger.info(f"获取章节信息, 章节 ID - {chapter_id}")
 
-        resp = None
         try:
             # 构造 url
             url = f"{self.api.ua_api}/wholepage/chapter/stu/{chapter_id}"
 
-            resp = self.client.get(url)
-            if resp.status_code != 200:
-                raise
+            resp = await self.client.get(url)
+            if not resp or resp.status_code != 200:
+                status_code = resp.status_code if resp else None
+                logger.error(f"获取章节信息时网络出错: HTTP {status_code}")
+                return None
 
             # 解析数据
-            resp_json = resp.json()
-            item_list = resp_json.get("wholepageItemDTOList")
-            item_info = {}
-            for item in item_list:
-                item_id = item["itemid"]
-                item_info[item_id] = {"pages": {}}
-
-                for page in item["wholepageDTOList"]:
-                    page_id = page["id"]
-                    item_info[item_id]["pages"][page_id] = {
-                        "name": page["content"],
-                        "type": "",
-                        "info": {},
-                    }
-                    page_info = item_info[item_id]["pages"][page_id]
-
-                    for element in page["coursepageDTOList"]:
-                        element_id = element["coursepageDTOid"]
-                        element_type = element["type"]
-                        element_type_map = {
-                            6: "question",
-                            4: "video",
-                            10: "office",
-                            12: "content",
-                        }
-                        if element_type not in element_type_map:
-                            logger.error(
-                                f"未适配的类型 TypeID - {element_type}, 请提供日志文件以供适配"
-                            )
-                            logger.debug(
-                                json.dumps(element, ensure_ascii=False, indent=2)
-                            )
-                            continue
-
-                        page_info["type"] = element_type_map[element_type]
-                        if element_type == 4:
-                            video_id = element["resourceid"]
-                            page_info["info"][video_id] = {
-                                "length": element["videoLength"]
-                            }
-                        elif element_type == 6:
-                            for question in element["questionDTOList"]:
-                                question_id = question["questionid"]
-                                page_info["info"][question_id] = {
-                                    "name": question["title"],
-                                    "score": question["score"],
-                                    "answer_list": self.get_question_answer_list(
-                                        question_id, page_id
-                                    ),
-                                }
-                        else:
-                            pass
-
-            return item_info
+            resp_body = resp.json()
+            return ChapterInfoAPIResponse(**resp_body)
 
         except Exception as e:
-            logger.error(
-                f"获取项目列表出错: "
-                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
-            )
-            return {}
+            logger.error(f"{format_exc()}\n获取章节信息时出错: {e}")
+            return None
 
-    def append_record_info(self, textbook_info: dict) -> dict:
+    async def get_study_record_info(
+        self, section_id: int
+    ) -> tuple[bool, StudyRecordAPIResponse | None]:
         """获取学习记录信息"""
-        logger.info(f"获取学习记录信息, 教材名 - {textbook_info["name"]}")
+        logger.info(f"获取学习记录信息, 段ID - {section_id}")
 
-        resp = None
         try:
             # 构造 url 与请求体
-            url = f"{self.api.ua_api}/studyrecord/item"
+            url = f"{self.api.ua_api}/studyrecord/item/{section_id}"
             payload = {"courseType": 4}
 
-            # 遍历章节
-            chapters: dict = textbook_info.get("chapters", {})
-            for chapter_id, chapter_info in chapters.items():
+            resp = await self.client.get(url=url, params=payload)
+            if not resp or resp.status_code != 200:
+                status_code = resp.status_code if resp else None
+                logger.error(f"获取学习记录信息时网络出错: HTTP {status_code}")
+                return False, None
 
-                # 遍历项目
-                items: dict = chapter_info.get("items", {})
-                for item_id, item_info in items.items():
-                    pages: dict = item_info.get("pages")
+            if not resp.text:
+                return True, None
 
-                    # 获取学习记录
-                    item_url = f"{url}/{item_id}"
-                    resp = self.client.get(url=item_url, params=payload)
-                    if resp.status_code != 200:
-                        raise
-
-                    if not resp.text:
-                        continue
-
-                    # 解析数据
-                    resp_json = resp.json()
-                    page_record_info = resp_json.get("pageStudyRecordDTOList")
-
-                    if not page_record_info:
-                        continue
-
-                    # 遍历页面
-                    for page_record in page_record_info:
-                        page_id = page_record["pageid"]
-
-                        # SB relationid
-                        for _, page_info in pages.items():
-                            if page_info["relation_id"] == page_id:
-                                if page_record["complete"]:
-                                    page_info["is_complete"] = True
-
-            return textbook_info
+            # 解析数据
+            resp_body = resp.json()
+            return True, StudyRecordAPIResponse(**resp_body)
 
         except Exception as e:
-            logger.error(
-                f"获取学习记录过程出错: "
-                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
-            )
-            return textbook_info
+            logger.error(f"{format_exc()}\n获取学习记录信息时出错: {e}")
+            return False, None
 
-    def start_rush_course(self, courses: dict) -> bool:
-        """传入课程配置信息, 开始刷课"""
-        logger.debug("开始刷课")
-
-        general_api = General(self.config, self.client)
-        user_info = general_api.get_user_info()
-        if not user_info:
-            logger.warning("无法获取用户信息, 无法启动刷课")
-            return False
-
-        for course_id, course_info in dict(courses).items():
-
-            logger.info(f'[课程][{course_id}] 正在刷 "{course_info["name"]}"')
-            textbooks: dict = course_info.get("textbooks", {})
-            for textbook_id, textbook_info in dict(textbooks).items():
-
-                logger.info(f'[教材][{textbook_id}] 正在刷 "{textbook_info["name"]}"')
-                chapters: dict = textbook_info.get("chapters", {})
-                for chapter_id, chapter_info in dict(chapters).items():
-
-                    logger.info(f'[章节][{chapter_id}] 正在刷 "{chapter_info["name"]}"')
-                    items: dict = chapter_info.get("items", {})
-                    for item_id, item_info in dict(items).items():
-
-                        logger.info(f'[项目][{item_id}] 正在刷 "{item_info["name"]}"')
-                        retry = 0
-                        while True:
-                            study_start_time = self.initialize_course(item_id)
-                            if study_start_time == -1:
-                                logger.warning(
-                                    f'[项目][{item_id}] 跳过 "{item_info["name"]}"'
-                                )
-
-                            pages: dict = item_info.get("pages", {})
-
-                            page_record_list = []
-                            self.build_rush_info(
-                                pages=pages,
-                                page_record_list=page_record_list,
-                                class_id=course_info["class_id"],
-                                textbook_id=textbook_id,
-                                chapter_id=chapter_id,
-                            )
-                            sync_status = self.sync_course(
-                                item_id=item_id,
-                                study_start_time=study_start_time,
-                                username=user_info["name"],
-                                score=100,
-                                page_record_list=page_record_list,
-                            )
-
-                            if sync_status:
-                                logger.success("上报成功")
-                                break
-
-                            if retry >= 3:
-                                logger.error("上报次数超过 3 次, 上报失败")
-                                break
-
-                            retry += 1
-
-        return True
-
-    def build_rush_info(
-        self,
-        pages: dict,
-        page_record_list: list,
-        class_id: int,
-        textbook_id: int,
-        chapter_id: int,
-    ):
-        for page_id, page_info in dict(pages).items():
-
-            element_info: dict = page_info.get("element_info", {})
-            element_type = element_info["type"]
-
-            study_time = 0
-            score = 0
-            study_record = {
-                "pageid": page_info["relation_id"],
-                "complete": 1,
-                "studyTime": 0,
-                "score": 0,
-                "answerTime": 1,
-                "submitTimes": 0,
-                "questions": [],
-                "videos": [],
-                "speaks": [],
-            }
-
-            logger.info(f"[页面][{page_id}] 正在构造请求信息, 类型: {element_type}")
-
-            if element_type == "video":
-                start_time = int(time.time())
-                score = 100
-                videos: dict = element_info.get("info", {})
-                for video_id, video_info in videos.items():
-                    self.watch_video_behavior(
-                        class_id=class_id,
-                        textbook_id=textbook_id,
-                        chapter_id=chapter_id,
-                        video_id=video_id,
-                    )
-                    video_length = video_info["length"]
-                    study_time += video_length
-                    study_record["videos"].append(
-                        {
-                            "videoid": video_id,
-                            "current": video_length,
-                            "status": 1,
-                            "recordTime": video_length,
-                            "time": video_length + random.uniform(1, 5),
-                            "startEndTimeList": [
-                                {
-                                    "startTime": start_time,
-                                    "endTime": start_time + video_length,
-                                }
-                            ],
-                        }
-                    )
-
-            elif element_type == "question":
-                questions: dict = element_info.get("info", {})
-
-                study_time = random.randint(120, 300)
-                study_record["coursepageId"] = page_info["relation_id"]
-                study_record["submitTimes"] = 1
-
-                for (
-                    question_id,
-                    question_info,
-                ) in questions.items():
-                    question_score = question_info["score"]
-                    score += question_score
-
-                    study_record["questions"].append(
-                        {
-                            "questionid": question_id,
-                            "answerList": question_info["answer_list"],
-                            "score": question_score,
-                        },
-                    )
-
-            else:
-                score = 100
-                config_study_time = self.config.study_time[element_type]
-                study_time = random.randint(
-                    config_study_time["min"], config_study_time["max"]
-                )
-
-            study_record["score"] = score
-            study_record["studyTime"] = study_time
-
-            page_record_list.append(study_record)
-            sleep_time = random.uniform(0.3, 1.2)
-            time.sleep(sleep_time)
-
-    def get_question_answer_list(self, question_id: int, parent_id: int) -> list:
+    async def get_question_answer_list(
+        self, question_id: int, parent_id: int
+    ) -> QuestionAnswerAPIResponse | None:
         """获取答案列表"""
         logger.info(f"获取答案列表 问题 ID - {question_id} 页面 ID - {parent_id}")
 
-        time.sleep(random.uniform(0.08, 0.2))
-
-        resp = None
         try:
             # 构造 url 与请求体
             url = f"{self.api.ua_api}/questionAnswer/{question_id}"
             payload = {"parentId": parent_id}
 
-            resp = self.client.get(url=url, params=payload)
-            if resp.status_code != 200:
-                raise
+            resp = await self.client.get(url=url, params=payload)
+            if not resp or resp.status_code != 200:
+                status_code = resp.status_code if resp else None
+                logger.error(f"获取答案列表时网络出错: HTTP {status_code}")
+                return None
 
             # 解析数据
-            resp_json = resp.json()
-            return resp_json["correctAnswerList"]
+            resp_body = resp.json()
+            return QuestionAnswerAPIResponse(**resp_body)
 
         except Exception as e:
-            logger.error(
-                f"获取答案时出错: "
-                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
-            )
-            return []
+            logger.error(f"{format_exc()}\n获取答案列表时出错: {e}")
+            return None
 
-    def initialize_course(self, item_id: int) -> int:
-        """初始化课程"""
-        logger.debug(f"初始化课程 ID - {item_id}")
+    async def initialize_section(self, section_id: int) -> int | None:
+        """初始化课件-段"""
+        logger.debug(f"初始化课程 段ID - {section_id}")
 
-        resp = None
         try:
             # 构造 url 与请求体
-            url = f"{self.api.ua_api}/studyrecord/initialize/{item_id}"
-            resp = self.client.get(url)
-            if resp.status_code != 200:
-                raise
+            url = f"{self.api.ua_api}/studyrecord/initialize/{section_id}"
+
+            resp = await self.client.get(url)
+            if not resp or resp.status_code != 200:
+                status_code = resp.status_code if resp else None
+                logger.error(f"初始化课件-段时网络出错: HTTP {status_code}")
+                return None
 
             return int(resp.text)
 
         except Exception as e:
-            logger.error(
-                f"初始化课程出错: "
-                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
-            )
-            return -1
+            logger.error(f"{format_exc()}\n初始化课程出错: {e}")
+            return None
 
-    def watch_video_behavior(
+    async def watch_video_behavior(
         self, class_id: int, textbook_id: int, chapter_id: int, video_id: int
     ) -> bool:
         """上报视频观看行为"""
         logger.debug("上报视频观看行为")
 
-        resp = None
         try:
             url = f"{self.api.course_api}/behavior/watchVideo"
             payload = {
@@ -625,121 +287,279 @@ class Course:
                 "videoId": video_id,
             }
 
-            resp = self.client.post(url=url, json=payload)
-            if resp.status_code != 200:
-                raise
+            resp = await self.client.post(url=url, json=payload)
+            if not resp or resp.status_code != 200:
+                status_code = resp.status_code if resp else None
+                logger.error(f"上报视频观看行为时网络出错: HTTP {status_code}")
+                return False
+
+            # 无内容返回
 
             return True
 
         except Exception as e:
-            logger.error(
-                f"上报视频观看行为出错: "
-                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
-            )
+            logger.error(f"{format_exc()}\n上报视频观看行为出错: {e}")
             return False
 
-    def sync_course(
-        self,
-        item_id: int,
-        study_start_time: int,
-        username: str,
-        score: int,
-        page_record_list: list,
-    ) -> bool:
-        """上报学习状态"""
-        logger.debug(f"上报学习状态 项目 ID - {item_id}")
+    async def sync_study_record(self, study_record: SyncStudyRecordAPIRequest) -> bool:
+        """上报学习记录"""
+        logger.debug(f"上报学习记录 段ID - {study_record.itemid}")
 
-        resp = None
         try:
             url = f"{self.api.ua_api}/yws/api/personal/sync"
             params = {"courseType": 4, "platform": "PC"}
-            payload = {
-                "itemid": item_id,
-                "autoSave": 1,
-                "withoutOld": None,
-                "complete": 1,
-                "studyStartTime": study_start_time,
-                "userName": username,
-                "score": score,
-                "pageStudyRecordDTOList": page_record_list,
-            }
-            payload_text = json.dumps(payload, ensure_ascii=False).replace(" ", "")
-            encrypted_text = self.sync_data_encrypt(payload_text)
+            payload_text = study_record.model_dump_json().replace(" ", "")
+            encrypted_text = sync_text_encrypt(payload_text)
 
-            resp = self.client.post(url=url, content=encrypted_text, params=params)
-            if resp.status_code != 200:
-                raise
+            resp = await self.client.post(
+                url=url, content=encrypted_text, params=params
+            )
+            if not resp or resp.status_code != 200:
+                status_code = resp.status_code if resp else None
+                logger.error(f"上报学习记录时网络出错: HTTP {status_code}")
+                return False
 
             if resp.text != "1":
-                logger.warning("上报学习状态失败")
+                logger.warning("上报学习记录失败")
                 return False
 
             return True
 
         except Exception as e:
-            logger.error(
-                f"上报学习状态过程出错: "
-                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
-            )
+            logger.error(f"{format_exc()}\n上报学习记录时出错: {e}")
             return False
 
-    @staticmethod
-    def sync_data_encrypt(text: str) -> str:
-        """sync接口数据加密"""
+    # async def sync_course(
+    #     self,
+    #     item_id: int,
+    #     study_start_time: int,
+    #     username: str,
+    #     score: int,
+    #     page_record_list: list,
+    # ) -> bool:
+    #     """上报学习状态"""
+    #     logger.debug(f"上报学习状态 项目 ID - {item_id}")
 
-        # 初始化密钥与文本
-        key = b"12345678"
-        data = text.encode("utf-8")
+    #     resp = None
+    #     try:
+    #         url = f"{self.api.ua_api}/yws/api/personal/sync"
+    #         params = {"courseType": 4, "platform": "PC"}
+    #         payload = {
+    #             "itemid": item_id,
+    #             "autoSave": 1,
+    #             "withoutOld": None,
+    #             "complete": 1,
+    #             "studyStartTime": study_start_time,
+    #             "userName": username,
+    #             "score": score,
+    #             "pageStudyRecordDTOList": page_record_list,
+    #         }
+    #         payload_text = json.dumps(payload, ensure_ascii=False).replace(" ", "")
+    #         encrypted_text = sync_text_encrypt(payload_text)
 
-        # 创建 DES 加密对象
-        cipher = DES.new(key, DES.MODE_ECB)
+    #         resp = await self.client.post(
+    #             url=url, content=encrypted_text, params=params
+    #         )
+    #         if not resp or resp.status_code != 200:
+    #             raise
 
-        # 填充数据并加密
-        padded_data = Padding.pad(data, DES.block_size)
-        encrypted_data = cipher.encrypt(padded_data)
+    #         if resp.text != "1":
+    #             logger.warning("上报学习状态失败")
+    #             return False
 
-        # Base64 编码
-        encoded_data = b64encode(encrypted_data)
-        encoded_text = encoded_data.decode("utf-8")
+    #         return True
 
-        return encoded_text
+    #     except Exception as e:
+    #         logger.error(
+    #             f"上报学习状态过程出错: "
+    #             + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
+    #         )
+    #         return False
 
-    @staticmethod
-    def sync_data_decrypt(text: str) -> str:
-        """sync接口解密"""
+    # async def start_rush_course(self, courses: dict) -> bool:
+    #     """传入课程配置信息, 开始刷课"""
+    #     logger.debug("开始刷课")
 
-        key = b"12345678"
-        data = b64decode(text.encode("utf-8"))
-        cipher = DES.new(key, DES.MODE_ECB)
-        decrypted_data = cipher.decrypt(data)
-        unpadded_data = Padding.unpad(decrypted_data, DES.block_size)
+    #     general_api = GeneralAPI(
+    #         username=self.user_config.username,
+    #         config=self.config,
+    #         client=self.client,
+    #     )
+    #     user_info = await general_api.get_user_info()
+    #     if not user_info:
+    #         logger.warning("无法获取用户信息, 无法启动刷课")
+    #         return False
 
-        return unpadded_data.decode("utf-8")
+    #     for course_id, course_info in dict(courses).items():
+
+    #         logger.info(f'[课程][{course_id}] 正在刷 "{course_info["name"]}"')
+    #         textbooks: dict = course_info.get("textbooks", {})
+    #         for textbook_id, textbook_info in dict(textbooks).items():
+
+    #             logger.info(f'[教材][{textbook_id}] 正在刷 "{textbook_info["name"]}"')
+    #             chapters: dict = textbook_info.get("chapters", {})
+    #             for chapter_id, chapter_info in dict(chapters).items():
+
+    #                 logger.info(f'[章节][{chapter_id}] 正在刷 "{chapter_info["name"]}"')
+    #                 items: dict = chapter_info.get("items", {})
+    #                 for item_id, item_info in dict(items).items():
+
+    #                     logger.info(f'[项目][{item_id}] 正在刷 "{item_info["name"]}"')
+    #                     retry = 0
+    #                     while True:
+    #                         study_start_time = await self.initialize_course(item_id)
+    #                         if study_start_time == -1:
+    #                             logger.warning(
+    #                                 f'[项目][{item_id}] 跳过 "{item_info["name"]}"'
+    #                             )
+
+    #                         pages: dict = item_info.get("pages", {})
+
+    #                         page_record_list = []
+    #                         await self.build_rush_info(
+    #                             pages=pages,
+    #                             page_record_list=page_record_list,
+    #                             class_id=course_info["class_id"],
+    #                             textbook_id=textbook_id,
+    #                             chapter_id=chapter_id,
+    #                         )
+    #                         sync_status = self.sync_course(
+    #                             item_id=item_id,
+    #                             study_start_time=study_start_time,
+    #                             username=user_info["name"],
+    #                             score=100,
+    #                             page_record_list=page_record_list,
+    #                         )
+
+    #                         if sync_status:
+    #                             logger.success("上报成功")
+    #                             break
+
+    #                         if retry >= 3:
+    #                             logger.error("上报次数超过 3 次, 上报失败")
+    #                             break
+
+    #                         retry += 1
+
+    #     return True
+
+    # async def build_rush_info(
+    #     self,
+    #     pages: dict,
+    #     page_record_list: list,
+    #     class_id: int,
+    #     textbook_id: int,
+    #     chapter_id: int,
+    # ):
+    #     for page_id, page_info in dict(pages).items():
+
+    #         element_info: dict = page_info.get("element_info", {})
+    #         element_type = element_info["type"]
+
+    #         study_time = 0
+    #         score = 0
+    #         study_record = {
+    #             "pageid": page_info["relation_id"],
+    #             "complete": 1,
+    #             "studyTime": 0,
+    #             "score": 0,
+    #             "answerTime": 1,
+    #             "submitTimes": 0,
+    #             "questions": [],
+    #             "videos": [],
+    #             "speaks": [],
+    #         }
+
+    #         logger.info(f"[页面][{page_id}] 正在构造请求信息, 类型: {element_type}")
+
+    #         if element_type == "video":
+    #             start_time = int(time.time())
+    #             score = 100
+    #             videos: dict = element_info.get("info", {})
+    #             for video_id, video_info in videos.items():
+    #                 await self.watch_video_behavior(
+    #                     class_id=class_id,
+    #                     textbook_id=textbook_id,
+    #                     chapter_id=chapter_id,
+    #                     video_id=video_id,
+    #                 )
+    #                 video_length = video_info["length"]
+    #                 study_time += video_length
+    #                 study_record["videos"].append(
+    #                     {
+    #                         "videoid": video_id,
+    #                         "current": video_length,
+    #                         "status": 1,
+    #                         "recordTime": video_length,
+    #                         "time": video_length + random.uniform(1, 5),
+    #                         "startEndTimeList": [
+    #                             {
+    #                                 "startTime": start_time,
+    #                                 "endTime": start_time + video_length,
+    #                             }
+    #                         ],
+    #                     }
+    #                 )
+
+    #         elif element_type == "question":
+    #             questions: dict = element_info.get("info", {})
+
+    #             study_time = random.randint(120, 300)
+    #             study_record["coursepageId"] = page_info["relation_id"]
+    #             study_record["submitTimes"] = 1
+
+    #             for (
+    #                 question_id,
+    #                 question_info,
+    #             ) in questions.items():
+    #                 question_score = question_info["score"]
+    #                 score += question_score
+
+    #                 study_record["questions"].append(
+    #                     {
+    #                         "questionid": question_id,
+    #                         "answerList": question_info["answer_list"],
+    #                         "score": question_score,
+    #                     },
+    #                 )
+
+    #         else:
+    #             score = 100
+    #             config_study_time = self.config.study_time[element_type]
+    #             study_time = random.randint(
+    #                 config_study_time["min"], config_study_time["max"]
+    #             )
+
+    #         study_record["score"] = score
+    #         study_record["studyTime"] = study_time
+
+    #         page_record_list.append(study_record)
+    #         sleep_time = random.uniform(0.3, 1.2)
+    #         time.sleep(sleep_time)
 
 
-class General:
-    def __init__(self, config: "Config", client: Client):
+class GeneralAPI:
+    def __init__(self, username: str, config: "Config", client: "HttpClient"):
+        self.user_config = config.users[username]
         self.config = config
-        self.api = ApiUrl.create(config.site)
         self.client = client
+        self.api = APIUrl.create(self.user_config.site)
 
-    def get_user_info(self) -> dict:
+    async def get_user_info(self) -> GeneralAPIUserInfoAPIResponse | None:
         """获取用户信息"""
         logger.debug("获取用户信息")
 
-        resp = None
         try:
             url = f"{self.api.ua_api}/user"
-            resp = self.client.get(url)
-            if resp.status_code != 200:
-                raise
+            resp = await self.client.get(url)
+            if not resp or resp.status_code != 200:
+                status_code = resp.status_code if resp else None
+                logger.error(f"获取用户信息时网络出错: HTTP {status_code}")
+                return None
 
-            resp_json = resp.json()
-            return resp_json
+            resp_body = resp.json()
+            return resp_body
 
         except Exception as e:
-            logger.error(
-                f"获取用户信息失败: "
-                + (f"HTTP {resp.status_code}" if resp else f"{e}\n{format_exc()}")
-            )
-            return {}
+            logger.error(f"{format_exc()}\n获取用户信息时出错: {e}")
+            return None
