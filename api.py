@@ -301,14 +301,14 @@ class CourseAPI:
             logger.error(f"{format_exc()}\n上报视频观看行为出错: {e}")
             return False
 
-    async def sync_study_record(self, study_record: SyncStudyRecordAPIRequest) -> bool:
+    async def sync_study_record(self, study_record_info: SyncStudyRecordAPIRequest) -> bool:
         """上报学习记录"""
-        logger.debug(f"上报学习记录 段ID - {study_record.itemid}")
+        logger.debug(f"上报学习记录 段ID - {study_record_info.itemid}")
 
         try:
             url = f"{self.api.ua_api}/yws/api/personal/sync"
             params = {"courseType": 4, "platform": "PC"}
-            payload_text = study_record.model_dump_json().replace(" ", "")
+            payload_text = study_record_info.model_dump_json().replace(" ", "")
             encrypted_text = sync_text_encrypt(payload_text)
 
             resp = await self.client.post(

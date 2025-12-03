@@ -1059,10 +1059,16 @@ class CourseManager:
                 logger.warning("当前用户未配置课程")
                 return None
 
+            user_info = await self.general_api.get_user_info()
+            if not user_info:
+                logger.warning("获取用户信息失败")
+                return None
+
             # 创建引用
             courses = self.user_config.courses
             for course_id, course_info in courses.items():
                 # 创建引用
+                class_id = course_info.class_id
                 textbooks = course_info.textbooks
 
                 for textbook_id, textbook_info in textbooks.items():
@@ -1074,7 +1080,64 @@ class CourseManager:
                         sections = chapter_info.sections
 
                         for section_id, section_info in sections.items():
-                            self.data_manager.build_sync_study_record_request
+                            study_start_time = await self.course_api.initialize_section(
+                                section_id=section_id
+                            )
+                            if not study_start_time:
+                                logger.warning(
+                                    f"初始化节 '{section_info.section_name}' 失败, 跳过"
+                                )
+                                continue
+
+                            # 创建引用
+                            pages = section_info.pages
+
+                            for page_id, page_info in pages.items():
+                                if page_info.page_content_type == 6:
+                                    for element_info in page_info.elements:
+                                        if not isinstance(element_info, ElementVideo):
+                                            continue
+
+                                        video_id = element_info.video_id
+
+                                        watch_status = await self.course_api.watch_video_behavior(
+                                            class_id=class_id,
+                                            textbook_id=textbook_id,
+                                            chapter_id=chapter_id,
+                                            video_id=video_id,
+                                        )
+
+                                        if not watch_status:
+                                            logger.warning(f"上报视频观看行为失败")
+
+                            retry = 0
+                            while True:
+                                study_record_info = (
+                                    self.data_manager.build_sync_study_record_request(
+                                        study_start_time=study_start_time,
+                                        section_info=section_info,
+                                        user_info=user_info,
+                                        study_time_config=self.config.study_time,
+                                    )
+                                )
+
+                                if not study_record_info:
+                                    logger.warning(f"构建请求信息失败, 跳过")
+                                    break
+
+                                sync_status = await self.course_api.sync_study_record(
+                                    study_record_info=study_record_info
+                                )
+
+                                if not sync_status:
+                                    logger.warning(f"同步学习记录失败")
+                                    continue
+
+                                if retry >= 3:
+                                    logger.warning(f"尝试重试同步学习记录失败, 跳过")
+                                    break
+
+                                retry += 1
 
         except Exception as e:
             logger.error(f"{format_exc()}\n刷课过程出现异常: {e}")
@@ -1546,6 +1609,11 @@ class DataManager:
                                     ),  # ？？为什么API返回浮点数但是提交的是整数
                                 )
                             )
+
+                # 未知类型
+                else:
+                    logger.warning(f"未知的页面类型: {page_content_type}")
+                    continue
 
                 page_study_record_dto_list.append(
                     PageStudyRecordDTO(
