@@ -661,6 +661,7 @@ class UserManager:
                     # 执行登录对修改进行校验
                     if await self.__login(user):
                         # __login() 执行成功会自动保存配置信息
+                        await self.refresh_login_status()
                         logger.success(f"成功修改属性 {attr_name} 的值")
                         break
 
