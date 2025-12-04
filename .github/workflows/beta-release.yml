@@ -14,7 +14,7 @@ jobs:
       - name: Get build time (UTC+8)
         id: info
         run: |
-          BUILD_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d_%H:%M:%S_%Z')
+          BUILD_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d_%H-%M-%S_%Z')
           echo "time=${BUILD_TIME}" >> $GITHUB_OUTPUT
           echo "Build time: ${BUILD_TIME}"
 
