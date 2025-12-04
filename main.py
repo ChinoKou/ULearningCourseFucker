@@ -46,8 +46,9 @@ class Main:
                     self.config.active_user = ""
                     self.config.save()
                     return await self.menu()
-                
+
                 retry += 1
+                await asyncio.sleep(1)
 
             if not self.active_client:
                 self.active_client = await self.user_manager.get_client()

@@ -481,6 +481,7 @@ class UserManager:
                         break
 
                     retry += 1
+                    await asyncio.sleep(1)
 
                 self.config.users.pop(user_config.username)
 
@@ -1301,6 +1302,7 @@ class CourseManager:
                                     break
 
                                 retry += 1
+                                await asyncio.sleep(1)
 
         except Exception as e:
             logger.error(f"{format_exc()}\n刷课过程出现异常: {e}")

@@ -584,7 +584,7 @@ class LoginAPIUserInfoResponse(BaseModel):
 
     orgName: str
     """机构名"""
-    headimage: str
+    headimage: str | None = None
     """头像"""
     roleId: int
     """角色ID"""
