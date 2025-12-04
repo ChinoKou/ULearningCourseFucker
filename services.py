@@ -1186,6 +1186,12 @@ class CourseManager:
                                             resp_question_answer_list.correctAnswerList
                                         )
 
+        # 清理空的课件
+        for course_id, course_info in dict(course_config).items():
+            course_info.prune()
+            if not course_info.textbooks:
+                course_config.pop(course_id)
+
     async def __start_course_ware(self) -> None:
         """开始刷课"""
         logger.debug("开始刷课")
@@ -1370,7 +1376,9 @@ class CourseManager:
             }
             logger.info("当前上报时长配置:")
             for k, v in self.config.study_time.model_dump().items():
-                logger.info(f"[{k}] {config_type_choice_map[k]}, 当前值: {v["min"]}~{v["max"]} 秒")
+                logger.info(
+                    f"[{k}] {config_type_choice_map[k]}, 当前值: {v["min"]}~{v["max"]} 秒"
+                )
             print("=" * 100)
 
         except Exception as e:
@@ -1464,7 +1472,7 @@ class CourseManager:
                 return None
 
             for course_id, course_info in dict(self.user_config.courses).items():
-                course_info.prune()
+                course_info.prune(remove_complete=True)
                 if not course_info.textbooks:
                     self.user_config.courses.pop(course_id)
 
@@ -1527,7 +1535,7 @@ class DataManager:
 
                 # 跳过隐藏章节
                 if chapter_is_hidden:
-                    logger.debug(f"跳过隐藏章节: {chapter_name}")
+                    logger.info(f"跳过隐藏章节: {chapter_name}")
                     continue
 
                 # 初始化配置文件课件章节对象
@@ -1548,7 +1556,7 @@ class DataManager:
 
                     # 跳过隐藏节
                     if section_is_hidden:
-                        logger.debug(f"跳过隐藏节: {section_name}")
+                        logger.info(f"跳过隐藏节: {section_name}")
                         continue
 
                     # 初始化配置文件课件节对象
