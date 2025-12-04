@@ -1004,7 +1004,7 @@ class CourseManager:
 
             # 生成教材选项
             textbook_choices = [
-                f"[{selected_course_infos[course_id].name}] {textbook_id}. {textbook_info.name}"
+                f"'{selected_course_infos[course_id].name}' [{textbook_id}] {textbook_info.name}"
                 for course_id, selected_course_textbook_info in selected_course_textbook_infos.items()
                 for textbook_id, textbook_info in selected_course_textbook_info.items()
             ]
@@ -1020,7 +1020,7 @@ class CourseManager:
 
             # 解析选择的教材为ID列表
             selected_textbook_ids: list[int] = [
-                int(textbook_id.split(".")[0].split("]")[1].strip())
+                int(textbook_id.split("'")[2].split("[")[1].split("]")[0].strip())
                 for textbook_id in raw_selected_textbook_ids
             ]
 
@@ -1320,6 +1320,7 @@ class CourseManager:
                 return None
 
             print("=" * 100)
+            logger.info("当前用户配置的课程信息:")
             # 创建引用
             courses = self.user_config.courses
 
@@ -1361,6 +1362,15 @@ class CourseManager:
                                 logger.info(
                                     f"       [{complete_status}] '{page_info.page_name}'"
                                 )
+            print("=" * 100)
+            config_type_choice_map = {
+                "question": "题目类型",
+                "document": "文档类型",
+                "content": "纯文本类型",
+            }
+            logger.info("当前上报时长配置:")
+            for k, v in self.config.study_time.model_dump().items():
+                logger.info(f"[{k}] {config_type_choice_map[k]}, 当前值: {v["min"]}~{v["max"]} 秒")
             print("=" * 100)
 
         except Exception as e:
@@ -1513,6 +1523,12 @@ class DataManager:
                 # 创建章节ID和章节名称变量
                 chapter_id = chapter_info.nodeid
                 chapter_name = chapter_info.nodetitle
+                chapter_is_hidden = chapter_info.hide
+
+                # 跳过隐藏章节
+                if chapter_is_hidden:
+                    logger.debug(f"跳过隐藏章节: {chapter_name}")
+                    continue
 
                 # 初始化配置文件课件章节对象
                 course_config_chapters[chapter_id] = CourseWareChapter(
@@ -1528,6 +1544,12 @@ class DataManager:
                     # 创建节ID和节名称和节详细信息变量
                     section_id = section_info.itemid
                     section_name = section_info.title
+                    section_is_hidden = section_info.hide
+
+                    # 跳过隐藏节
+                    if section_is_hidden:
+                        logger.debug(f"跳过隐藏节: {section_name}")
+                        continue
 
                     # 初始化配置文件课件节对象
                     course_config_sections[section_id] = CourseWareSection(
