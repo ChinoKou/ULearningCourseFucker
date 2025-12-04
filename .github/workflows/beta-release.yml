@@ -69,6 +69,8 @@ jobs:
           tag_name: beta
           name: Beta
           prerelease: true
+          body: |
+            ## ULearningCWAuto Beta
           files: |
             ./artifacts/ULearningCWAuto-linux/*
             ./artifacts/ULearningCWAuto-windows/*
