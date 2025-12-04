@@ -695,7 +695,7 @@ class ConfigModel(BaseModel):
         content: MinMaxTime = Field(default_factory=MinMaxTime)
         """内容类型的上报时间范围"""
 
-    debug: bool = True
+    debug: bool = False
     active_user: str = ""
     users: dict[str, UserConfig] = Field(default_factory=dict)
     study_time: StudyTime = Field(default_factory=StudyTime)
