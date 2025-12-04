@@ -121,7 +121,7 @@ def set_logger(debug=False, dir_name: str = "ulearning_logs") -> None:
     """设置日志"""
 
     # 创建日志目录
-    log_dir = os.path.join(os.path.abspath(__file__), "..", dir_name)
+    log_dir = os.path.join(os.getcwd(), dir_name)
     if not os.path.exists(log_dir):
         os.mkdir(log_dir)
 
