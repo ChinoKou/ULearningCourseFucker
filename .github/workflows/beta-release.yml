@@ -4,8 +4,30 @@ on:
   workflow_dispatch:
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      time: ${{ steps.info.outputs.time }}
+      tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - name: Get build time (UTC+8)
+        id: info
+        run: |
+          BUILD_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%_%H:%M:%_%Z')
+          echo "time=${BUILD_TIME}" >> $GITHUB_OUTPUT
+          echo "Build time: ${BUILD_TIME}"
+
+      - name: Generate tag
+        id: tag
+        run: |
+          TAG="beta-${{ steps.info.outputs.time }}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Tag: ${TAG}"
+
   build:
     name: Build ${{ matrix.platform }}
+    needs: prepare
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -16,22 +38,13 @@ jobs:
           - os: windows-latest
             platform: windows
             ext: ".exe"
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Generate tag
-        id: tag
-        shell: bash
-        run: |
-          TAG="beta-$(TZ='Asia/Shanghai' date '+%Y%m%d-%H%M%S')"
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+        uses: actions/checkout@v6
 
       - name: Set up UV
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
 
       - name: Install dependencies
         run: |
@@ -43,52 +56,44 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           source .venv/bin/activate
-          pyinstaller --onefile --name ULearningCWAuto-linux-${{ steps.tag.outputs.tag }} main.py
+          pyinstaller --onefile --name ULearningCWAuto-linux-${{ needs.prepare.outputs.tag }} main.py
 
       - name: Build (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
           .venv\Scripts\Activate.ps1
-          pyinstaller --onefile --name ULearningCWAuto-windows-${{ steps.tag.outputs.tag }} main.py
+          pyinstaller --onefile --name ULearningCWAuto-windows-${{ needs.prepare.outputs.tag }} main.py
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ULearningCWAuto-${{ matrix.platform }}
-          path: dist/ULearningCWAuto-${{ matrix.platform }}-${{ steps.tag.outputs.tag }}${{ matrix.ext }}
+          path: dist/ULearningCWAuto-${{ matrix.platform }}-${{ needs.prepare.outputs.tag }}${{ matrix.ext }}
           retention-days: 1
 
   release:
-    needs: build
+    name: Create Release
+    needs: [prepare, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           path: ./artifacts
-
-      - name: Get info
-        id: info
-        run: |
-          echo "time=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.build.outputs.tag }}
-          name: Beta ${{ needs.build.outputs.tag }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: Beta
           prerelease: true
           body: |
             ## ULearningCWAuto Beta
-            - Build Time ${{ steps.info.outputs.time }}
-
+            - Build Time ${{ needs.prepare.outputs.time }}
           files: |
             ./artifacts/ULearningCWAuto-linux/*
             ./artifacts/ULearningCWAuto-windows/*
