@@ -552,6 +552,7 @@ class UserManager:
 
                 user = self.config.users[username]
                 if await self.__login(user):
+                    logger.success(f"登录成功: {username}")
                     break
 
                 logger.warning("登录失败")
@@ -656,8 +657,8 @@ class UserManager:
                     setattr(user, attr_name, attr_value)
 
                     # 去除 token 和 cookies
-                    user.token = "a"
-                    user.cookies.clear()
+                    setattr(user, "token", "a")
+                    setattr(user, "cookies", {})
 
                     # 执行登录对修改进行校验
                     if await self.__login(user):
