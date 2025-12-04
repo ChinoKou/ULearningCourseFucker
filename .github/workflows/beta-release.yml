@@ -58,6 +58,13 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Delete beta tag
+        run: |
+          git push --delete origin beta || true
+
       - name: Download artifacts
         uses: actions/download-artifact@v6
         with:
