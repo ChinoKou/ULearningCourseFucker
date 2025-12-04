@@ -1,9 +1,7 @@
-name: Release
+name: Beta Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
 
 jobs:
   build:
@@ -18,50 +16,47 @@ jobs:
           - os: windows-latest
             platform: windows
             ext: ".exe"
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Generate tag
+        id: tag
+        shell: bash
+        run: |
+          TAG="beta-$(TZ='Asia/Shanghai' date '+%Y%m%d-%H%M%S')"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
       - name: Set up UV
         uses: astral-sh/setup-uv@v4
 
-      - name: Setup environment
+      - name: Install dependencies
         run: |
           uv venv
           uv pip install -r requirements.txt
-          uv pip install nuitka
-
-      - name: Install dependencies (Linux)
-        if: matrix.platform == 'linux'
-        run: |
-          sudo apt update
-          sudo apt install -y ccache patchelf
-
-      - name: Install dependencies (Windows)
-        if: matrix.platform == 'windows'
-        run: |
-          choco install upx -y
-          upx --version
+          uv pip install pyinstaller
 
       - name: Build (Linux)
         if: matrix.platform == 'linux'
         run: |
           source .venv/bin/activate
-          python -m nuitka --onefile --standalone --assume-yes-for-downloads --lto=yes --jobs=$(nproc) --enable-plugin=upx --output-filename=ULearningCWAuto-linux-${{ github.ref_name }} main.py
+          pyinstaller --onefile --name ULearningCWAuto-linux-${{ steps.tag.outputs.tag }} main.py
 
       - name: Build (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
           .venv\Scripts\Activate.ps1
-          python -m nuitka --standalone --onefile --assume-yes-for-downloads --lto=yes --jobs=3 --enable-plugin=upx --onefile-no-compression --output-filename=ULearningCWAuto-windows-${{ github.ref_name }}.exe main.py
+          pyinstaller --onefile --name ULearningCWAuto-windows-${{ steps.tag.outputs.tag }} main.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ULearningCWAuto-${{ matrix.platform }}
-          path: ULearningCWAuto-${{ matrix.platform }}-${{ github.ref_name }}${{ matrix.ext }}
+          path: dist/ULearningCWAuto-${{ matrix.platform }}-${{ steps.tag.outputs.tag }}${{ matrix.ext }}
           retention-days: 1
 
   release:
@@ -79,13 +74,21 @@ jobs:
         with:
           path: ./artifacts
 
+      - name: Get info
+        id: info
+        run: |
+          echo "time=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          name: Release ${{ github.ref_name }}
-          draft: true
-          prerelease: false
-          generate_release_notes: true
+          tag_name: ${{ needs.build.outputs.tag }}
+          name: Beta ${{ needs.build.outputs.tag }}
+          prerelease: true
+          body: |
+            ## ULearningCWAuto Beta
+            - Build Time ${{ steps.info.outputs.time }}
+
           files: |
             ./artifacts/ULearningCWAuto-linux/*
             ./artifacts/ULearningCWAuto-windows/*
