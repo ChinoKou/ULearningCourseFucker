@@ -83,7 +83,11 @@ class HttpClient:
         :return: 响应体
         :rtype: Response | None
         """
-        logger.debug(f"GET: {url}")
+        url_log = url
+        if "isValidToken" in url:
+            token = url.split("/").pop()
+            url_log = url.replace(token, "*" * len(token))
+        logger.debug(f"GET: {url_log}")
 
         try:
             return await self.__client.get(url, params=params, timeout=timeout)
@@ -1213,17 +1217,26 @@ class CourseManager:
             for course_id, course_info in courses.items():
                 # 创建引用
                 class_id = course_info.class_id
+                course_name = course_info.course_name
                 textbooks = course_info.textbooks
+
+                logger.info(f"[课程][{course_id}] 开始处理 '{course_name}'")
 
                 # 遍历教材
                 for textbook_id, textbook_info in textbooks.items():
                     # 创建引用
+                    textbook_name = textbook_info.textbook_name
                     chapters = textbook_info.chapters
+
+                    logger.info(f"[教材][{textbook_id}] 开始处理 '{textbook_name}'")
 
                     # 遍历章
                     for chapter_id, chapter_info in chapters.items():
                         # 创建引用
+                        chapter_name = chapter_info.chapter_name
                         sections = chapter_info.sections
+
+                        logger.info(f"[章][{chapter_id}] 开始处理 '{chapter_name}'")
 
                         # 遍历节
                         for section_id, section_info in sections.items():
@@ -1267,12 +1280,17 @@ class CourseManager:
                                         )
 
                                         if not watch_status:
-                                            logger.warning(f"上报视频观看行为失败")
+                                            logger.warning(
+                                                f"[视频][{video_id}] 上报观看行为失败"
+                                            )
 
                                         else:
-                                            logger.success(f"上报视频观看行为成功")
+                                            logger.success(
+                                                f"[视频][{video_id}] 上报观看行为成功"
+                                            )
 
                             # 为该 节 创建学习记录请求
+                            logger.info(f"[节][{section_id}] 开始构造同步学习记录请求")
                             retry = 0
                             while True:
                                 # 构造同步学习记录请求
@@ -1297,16 +1315,22 @@ class CourseManager:
 
                                 # 重试过多
                                 if retry >= 3:
-                                    logger.warning(f"尝试重试上报学习记录失败, 跳过")
+                                    logger.warning(
+                                        f"[节][{section_id}] 尝试重试上报学习记录失败, 跳过"
+                                    )
                                     break
 
                                 # 上报失败
                                 if not sync_status:
-                                    logger.warning(f"上报学习记录失败")
+                                    logger.warning(
+                                        f"[节][{section_id}] 上报学习记录失败"
+                                    )
 
                                 # 上报成功
                                 else:
-                                    logger.success(f"上报学习记录成功")
+                                    logger.success(
+                                        f"[节][{section_id}] 上报学习记录成功"
+                                    )
                                     break
 
                                 retry += 1
@@ -1808,6 +1832,9 @@ class DataManager:
             for page_id, page_info in pages.items():
                 # 创建引用
                 page_content_type = page_info.page_content_type
+                page_name = page_info.page_name
+
+                logger.info(f"[页面][{page_id}] 正在处理 '{page_name}'")
 
                 # 初始化构造信息
                 page_study_time = 0
@@ -1823,8 +1850,15 @@ class DataManager:
                     # 获取元素数量
                     element_num = len(page_info.elements)
 
+                    # 判断页面类型
+                    element_is_document = False
+                    for element in page_info.elements:
+                        if isinstance(element, ElementDocumen):
+                            element_is_document = True
+                            break
+
                     # 类型为Doc
-                    if ElementDocumen in page_info.elements:
+                    if element_is_document:
                         # 添加学习时长, 最大时长为3600秒
                         page_study_time += min(
                             random.randint(
@@ -1834,6 +1868,7 @@ class DataManager:
                             * element_num,
                             3600,
                         )
+                        logger.info(f"[文档] 学习 {page_study_time} 秒")
 
                     # 类型为Content
                     else:
@@ -1846,6 +1881,7 @@ class DataManager:
                             * element_num,
                             3600,
                         )
+                        logger.info(f"[纯文本] 学习 {page_study_time} 秒")
 
                 # 类型为Video
                 elif page_content_type == 6:
@@ -1865,6 +1901,7 @@ class DataManager:
 
                         # 添加学习时长
                         page_study_time += video_length
+                        logger.info(f"[视频][{video_id}] 学习 {video_length} 秒")
 
                         # 获取视频开始时间戳(s)
                         video_start_time = time.time()
@@ -1899,6 +1936,7 @@ class DataManager:
                         ),
                         3600,
                     )
+                    logger.info(f"[题目] 学习 {page_study_time} 秒")
 
                     # 遍历所有元素
                     elements = page_info.elements
