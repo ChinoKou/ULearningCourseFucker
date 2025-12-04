@@ -48,14 +48,14 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           source .venv/bin/activate
-          python -m nuitka --onefile --standalone --assume-yes-for-downloads --lto=yes --jobs=$(nproc) --enable-plugin=upx --output-filename=ULearningCWAuto-linux-${{ github.ref_name }} main.py
+          python -m nuitka --onefile --standalone --assume-yes-for-downloads --lto=yes --jobs=$(nproc) --enable-plugin=upx --output-filename=ULearningCWAuto-${{ matrix.platform }}-${{ github.ref_name }}${{ matrix.ext }} main.py
 
       - name: Build (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
           .venv\Scripts\Activate.ps1
-          python -m nuitka --standalone --onefile --assume-yes-for-downloads --lto=yes --jobs=3 --enable-plugin=upx --onefile-no-compression --output-filename=ULearningCWAuto-windows-${{ github.ref_name }}.exe main.py
+          python -m nuitka --standalone --onefile --assume-yes-for-downloads --lto=yes --jobs=3 --enable-plugin=upx --onefile-no-compression --output-filename=ULearningCWAuto-${{ matrix.platform }}-${{ github.ref_name }}${{ matrix.ext }} main.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v5

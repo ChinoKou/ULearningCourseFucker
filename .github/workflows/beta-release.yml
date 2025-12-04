@@ -4,30 +4,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    outputs:
-      time: ${{ steps.info.outputs.time }}
-      tag: ${{ steps.tag.outputs.tag }}
-
-    steps:
-      - name: Get build time (UTC+8)
-        id: info
-        run: |
-          BUILD_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d_%H-%M-%S_%Z')
-          echo "time=${BUILD_TIME}" >> $GITHUB_OUTPUT
-          echo "Build time: ${BUILD_TIME}"
-
-      - name: Generate tag
-        id: tag
-        run: |
-          TAG="beta-${{ steps.info.outputs.time }}"
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "Tag: ${TAG}"
-
   build:
     name: Build ${{ matrix.platform }}
-    needs: prepare
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -56,25 +34,25 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           source .venv/bin/activate
-          pyinstaller --onefile --name ULearningCWAuto-linux-${{ needs.prepare.outputs.tag }} main.py
+          pyinstaller --onefile --name ULearningCWAuto-${{ matrix.platform }}-beta main.py
 
       - name: Build (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
           .venv\Scripts\Activate.ps1
-          pyinstaller --onefile --name ULearningCWAuto-windows-${{ needs.prepare.outputs.tag }} main.py
+          pyinstaller --onefile --name ULearningCWAuto-${{ matrix.platform }}-beta main.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v5
         with:
           name: ULearningCWAuto-${{ matrix.platform }}
-          path: dist/ULearningCWAuto-${{ matrix.platform }}-${{ needs.prepare.outputs.tag }}${{ matrix.ext }}
+          path: dist/ULearningCWAuto-${{ matrix.platform }}-beta${{ matrix.ext }}
           retention-days: 1
 
   release:
     name: Create Release
-    needs: [prepare, build]
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -88,12 +66,9 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.prepare.outputs.tag }}
+          tag_name: beta
           name: Beta
           prerelease: true
-          body: |
-            ## ULearningCWAuto Beta
-            - Build Time ${{ needs.prepare.outputs.time }}
           files: |
             ./artifacts/ULearningCWAuto-linux/*
             ./artifacts/ULearningCWAuto-windows/*
