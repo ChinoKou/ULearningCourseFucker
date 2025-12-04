@@ -475,6 +475,7 @@ class UserManager:
                 while True:
                     # 登录
                     if await self.__login(user_config=user_config):
+                        await self.refresh_login_status()
                         return True
 
                     if retry >= 3:
