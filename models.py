@@ -618,7 +618,7 @@ class GeneralAPIUserInfoAPIResponse(BaseModel):
     """用户ID"""
     name: str
     """姓名"""
-    headimage: str
+    headimage: str | None = None
     """头像"""
     orgid: int
     """机构ID"""
