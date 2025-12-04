@@ -126,7 +126,7 @@ def set_logger(debug=False, dir_name: str = "ulearning_logs") -> None:
         os.mkdir(log_dir)
 
     # 初始化日志配置
-    start_time = strftime("%Y-%m-%d", localtime())
+    start_time = strftime("%Y-%m-%d_%H-%M-%S", localtime())
     log_file = os.path.join(log_dir, f"{start_time}.log")
     log_level = "DEBUG" if debug else "INFO"
     log_format = "<green>{time:MM-DD HH:mm:ss}</green> | <level>{level:<8}</level> | <level>{message}</level>"
