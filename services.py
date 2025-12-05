@@ -771,9 +771,16 @@ class ConfigManager:
         logger.debug("配置管理菜单")
 
         # 初始化选项
-        choices = ["修改调试模式", "重新读取配置文件", "重新写入配置文件", "返回"]
+        choices = [
+            "修改调试模式",
+            "修改上报冷却",
+            "重新读取配置文件",
+            "重新写入配置文件",
+            "返回",
+        ]
         choices_map = {
             "修改调试模式": self.__change_debug_mode,
+            "修改上报冷却": self.__change_sleep_time,
             "重新读取配置文件": self.__reload_config,
             "重新写入配置文件": self.__rewrite_config,
             "返回": lambda: None,
@@ -839,6 +846,30 @@ class ConfigManager:
 
         except Exception as e:
             logger.error(f"{format_exc()}\n修改调试模式失败: {e}")
+            return None
+
+    async def __change_sleep_time(self) -> None:
+        """修改上报冷却"""
+        logger.debug("修改上报冷却")
+
+        try:
+            current_sleep_time = self.config.sleep_time
+            new_sleep_time = await answer(
+                questionary.text(
+                    message=f"[当前值: {current_sleep_time}s]请输入新的上报冷却时间(秒):",
+                    default=str(1.0),
+                    validate=lambda x: x.replace(".", "", 1).isdigit()
+                    and 0 <= float(x) <= 10
+                    or "请输入正确的数字(0~10)",
+                )
+            )
+            self.config.sleep_time = float(new_sleep_time)
+            self.config.save()
+
+            logger.success(f"已修改上报冷却时间为 {self.config.sleep_time}s")
+
+        except Exception as e:
+            logger.error(f"{format_exc()}\n修改上报冷却失败: {e}")
             return None
 
     async def __reload_config(self) -> None:
@@ -1289,6 +1320,9 @@ class CourseManager:
                                                 f"[视频][{video_id}] 上报观看行为成功"
                                             )
 
+                                        # 休眠 0.3s
+                                        await asyncio.sleep(0.3)
+
                             # 为该 节 创建学习记录请求
                             logger.info(f"[节][{section_id}] 开始构造同步学习记录请求")
                             retry = 0
@@ -1307,6 +1341,8 @@ class CourseManager:
                                 if not study_record_info:
                                     logger.warning(f"构建请求信息失败, 跳过")
                                     break
+
+                                logger.info(f"[节][{section_id}] 开始上报学习记录")
 
                                 # 上报学习记录
                                 sync_status = await self.course_api.sync_study_record(
@@ -1335,6 +1371,9 @@ class CourseManager:
 
                                 retry += 1
                                 await asyncio.sleep(1)
+
+                            # 冷却
+                            await asyncio.sleep(self.config.sleep_time)
 
         except Exception as e:
             logger.error(f"{format_exc()}\n刷课过程出现异常: {e}")
@@ -1398,6 +1437,7 @@ class CourseManager:
                 "document": "文档类型",
                 "content": "纯文本类型",
             }
+            logger.info(f"上报冷却时间: {self.config.sleep_time:.2f} 秒")
             logger.info("当前上报时长配置:")
             for k, v in self.config.study_time.model_dump().items():
                 logger.info(

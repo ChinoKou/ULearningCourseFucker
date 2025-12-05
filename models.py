@@ -697,9 +697,15 @@ class ConfigModel(BaseModel):
         """内容类型的上报时间范围"""
 
     debug: bool = False
+    """调试模式"""
     active_user: str = ""
+    """当前活跃用户"""
     users: dict[str, UserConfig] = Field(default_factory=dict)
+    """用户信息"""
     study_time: StudyTime = Field(default_factory=StudyTime)
+    """学习时间配置"""
+    sleep_time: float = 1
+    """休眠时间(s)"""
 
 
 @dataclass
