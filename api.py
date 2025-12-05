@@ -9,8 +9,8 @@ from config import Config
 from models import (
     APIUrl,
     ChapterInfoAPIResponse,
-    CourseListAPIResponse,
     CourseAPIUserInfoAPIResponse,
+    CourseListAPIResponse,
     LoginAPIUserInfoResponse,
     QuestionAnswerAPIResponse,
     StudyRecordAPIResponse,
@@ -183,22 +183,16 @@ class CourseAPI:
             logger.error(f"{format_exc()}\n[API] 获取课程列表时出错: {e}")
             return None
 
-    async def get_textbooks(
-        self, course_id: int, class_id: int
-    ) -> TextbookListAPIResponse | None:
+    async def get_textbooks(self, course_id: int) -> TextbookListAPIResponse | None:
         """
         获取教材列表API
 
         :param course_id: 课程ID
         :type course_id: int
-        :param class_id: 你在该课程的班级ID
-        :type class_id: int
         :return: 教材列表API响应数据模型
         :rtype: TextbookListAPIResponse | None
         """
-        logger.debug(
-            f"[API][O] 获取教材列表 课程 ID - {course_id} 班级 ID - {class_id}"
-        )
+        logger.debug(f"[API][O] 获取教材列表 课程 ID - {course_id}")
 
         try:
             # 构造 url 与请求体
@@ -217,9 +211,7 @@ class CourseAPI:
             resp_body = resp.json()
             resp_model = TextbookListAPIResponse.create(resp=resp_body)
 
-            logger.debug(
-                f"[API][✓] 获取教材列表 课程 ID - {course_id} 班级 ID - {class_id}"
-            )
+            logger.debug(f"[API][✓] 获取教材列表 课程 ID - {course_id}")
 
             return resp_model
 

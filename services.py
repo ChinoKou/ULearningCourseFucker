@@ -1050,11 +1050,14 @@ class CourseManager:
 
                 # 获取教材
                 textbooks = await self.course_api.get_textbooks(
-                    course_id=selected_course_id,
-                    class_id=selected_course_info.classId,
+                    course_id=selected_course_id
                 )
 
                 if not textbooks:
+                    logger.warning(f"课程 {selected_course_info.name} 获取教材失败")
+                    continue
+
+                if not textbooks.textbooks:
                     logger.warning(f"课程 {selected_course_info.name} 没有课件")
                     continue
 
@@ -1073,6 +1076,10 @@ class CourseManager:
                 for course_id, selected_course_textbook_info in selected_course_textbook_infos.items()
                 for textbook_id, textbook_info in selected_course_textbook_info.items()
             ]
+
+            if not textbook_choices:
+                logger.warning("没有可配置的教材")
+                return None
 
             # 获取用户选择的教材
             raw_selected_textbook_ids: list[str] = await answer(
