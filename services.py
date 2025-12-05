@@ -25,6 +25,7 @@ from models import (
     GeneralAPIUserInfoAPIResponse,
     ModelCourse,
     ModelTextbook,
+    QuestionAnswerAPIResponse,
     StudyRecordAPIResponse,
     SyncStudyRecordAPIRequest,
     TextbookInfoAPIResponse,
@@ -536,7 +537,7 @@ class UserManager:
 
                 if username in self.users:
                     self.users.pop(username)
-                
+
                 logger.success(f"成功删除账号: {username}")
 
         except Exception as e:
@@ -1123,6 +1124,10 @@ class CourseManager:
             self.user_config.courses = course_config
             self.config.save()
 
+            await self.__print_course_ware_info()
+
+            logger.success("课件配置成功, 请使用 '开始刷课' 启动刷课")
+
         except Exception as e:
             logger.error(f"{format_exc()}\n[MANAGER][COURSE] 课件配置出错: {e}")
             return None
@@ -1137,14 +1142,37 @@ class CourseManager:
         for course_id, course_info in course_config.items():
             # 创建引用
             textbooks = course_info.textbooks
+            course_name = course_info.course_name
+
+            logger.info(f"[课程][{course_name}] 开始解析")
+
+            # 收集获取教材信息的协程对象列表
+            coros_get_textbook_info = []
+            for textbook_id, textbook_info in textbooks.items():
+                coros_get_textbook_info.append(
+                    self.course_api.get_textbook_info(
+                        textbook_id=textbook_id, class_id=course_info.class_id
+                    )
+                )
+
+            # 异步调度
+            results_get_textbook_info = await asyncio.gather(*coros_get_textbook_info)
+
+            # 解析异步调度信息
+            parsed_textbook_infos: dict[int, TextbookInfoAPIResponse] = {}
+            for result in results_get_textbook_info:
+                for textbook_id, textbook_info in result.items():
+                    parsed_textbook_infos[textbook_id] = textbook_info
+
+            logger.success(
+                f"[课程][{course_name}] 获取到 {len(parsed_textbook_infos)} 个教材信息"
+            )
 
             # 遍历教材
             for textbook_id, textbook_info in textbooks.items():
 
                 # 获取教材信息
-                resp_textbook_info = await self.course_api.get_textbook_info(
-                    textbook_id=textbook_id, class_id=course_info.class_id
-                )
+                resp_textbook_info = parsed_textbook_infos[textbook_id]
 
                 # 跳过获取失败的教材信息
                 if not resp_textbook_info:
@@ -1161,13 +1189,35 @@ class CourseManager:
 
                 # 创建引用
                 chapters = textbook_info.chapters
+                textbook_name = textbook_info.textbook_name
 
-                # 遍历章节
+                logger.info(f"[教材][{textbook_name}] 开始解析")
+
+                # 收集获取章节信息的协程对象列表
+                coros_get_textbook_info = []
+                for chapter_id, chapter_info in chapters.items():
+                    coros_get_textbook_info.append(
+                        self.course_api.get_chapter_info(chapter_id=chapter_id)
+                    )
+
+                # 异步调度
+                results_get_chapter_info = await asyncio.gather(
+                    *coros_get_textbook_info
+                )
+
+                # 解析异步调度信息
+                parsed_chapter_infos: dict[int, ChapterInfoAPIResponse] = {}
+                for result in results_get_chapter_info:
+                    for chapter_id, chapter_info in result.items():
+                        parsed_chapter_infos[chapter_id] = chapter_info
+
+                logger.success(
+                    f"[教材][{textbook_name}] 获取到 {len(parsed_chapter_infos)} 个章节信息"
+                )
+
                 for chapter_id, chapter_info in chapters.items():
                     # 获取章节信息
-                    resp_chapter_info = await self.course_api.get_chapter_info(
-                        chapter_id=chapter_id
-                    )
+                    resp_chapter_info = parsed_chapter_infos[chapter_id]
 
                     # 跳过获取失败的章节信息
                     if not resp_chapter_info:
@@ -1185,16 +1235,44 @@ class CourseManager:
 
                     # 创建引用
                     sections = chapter_info.sections
+                    chapter_name = chapter_info.chapter_name
+
+                    logger.info(f"[章节][{chapter_name}] 开始解析")
+
+                    # 收集获取学习记录信息的协程对象列表
+                    coros_get_study_record_info = []
+                    for section_id, section_info in sections.items():
+                        coros_get_study_record_info.append(
+                            self.course_api.get_study_record_info(section_id=section_id)
+                        )
+
+                    # 异步调度
+                    results_get_study_record_info = await asyncio.gather(
+                        *coros_get_study_record_info
+                    )
+
+                    # 解析异步调度信息
+                    parsed_study_record_infos: dict[
+                        int, tuple[bool, StudyRecordAPIResponse | None]
+                    ] = {}
+                    for result in results_get_study_record_info:
+                        for section_id, (status, study_record_info) in result.items():
+                            parsed_study_record_infos[section_id] = (
+                                status,
+                                study_record_info,
+                            )
+
+                    logger.success(
+                        f"[章节][{chapter_name}] 获取到 {len(parsed_study_record_infos)} 个学习记录信息"
+                    )
 
                     # 遍历节
                     for section_id, section_info in sections.items():
                         # 创建引用
                         section_name = section_info.section_name
-                        resp_status, resp_study_record_info = (
-                            await self.course_api.get_study_record_info(
-                                section_id=section_id
-                            )
-                        )
+                        resp_status, resp_study_record_info = parsed_study_record_infos[
+                            section_id
+                        ]
 
                         # 跳过获取失败的学习记录
                         if not resp_status:
@@ -1228,14 +1306,52 @@ class CourseManager:
                                     if not isinstance(element_info, ElementQuestion):
                                         raise
 
+                                    logger.info(
+                                        f"[题目][{page_info.page_name}] 开始解析"
+                                    )
+
+                                    # 收集获取题目答案信息的协程对象列表
+                                    coros_get_question_answer_list = []
+                                    for question_info in element_info.questions:
+                                        question_id = question_info.question_id
+                                        coros_get_question_answer_list.append(
+                                            self.course_api.get_question_answer_list(
+                                                question_id=question_id,
+                                                parent_id=page_id,
+                                            )
+                                        )
+
+                                    # 异步调度
+                                    results_get_question_answer_list = (
+                                        await asyncio.gather(
+                                            *coros_get_question_answer_list
+                                        )
+                                    )
+
+                                    # 解析异步调度信息
+                                    parsed_question_answer_lists: dict[
+                                        int, QuestionAnswerAPIResponse
+                                    ] = {}
+                                    for result in results_get_question_answer_list:
+                                        for (
+                                            question_id,
+                                            question_answer_list,
+                                        ) in result.items():
+                                            parsed_question_answer_lists[
+                                                question_id
+                                            ] = question_answer_list
+
+                                    logger.success(
+                                        f"[题目][{page_info.page_name}] 获取到 {len(parsed_question_answer_lists)} 个问题的答案列表"
+                                    )
+
                                     # 遍历问题元素的所有问题
                                     for question_info in element_info.questions:
                                         question_id = question_info.question_id
 
                                         # 获取问题答案列表
-                                        resp_question_answer_list = await self.course_api.get_question_answer_list(
-                                            question_id=question_id,
-                                            parent_id=page_id,
+                                        resp_question_answer_list = (
+                                            parsed_question_answer_lists[question_id]
                                         )
 
                                         # 答案获取失败
@@ -1319,6 +1435,37 @@ class CourseManager:
                             for page_id, page_info in pages.items():
                                 # 如果页面类型为视频
                                 if page_info.page_content_type == 6:
+
+                                    # 收集上报视频观看行为的协程对象列表
+                                    coros_watch_video_behavior = []
+                                    for element_info in page_info.elements:
+                                        # 跳过非视频元素
+                                        if not isinstance(element_info, ElementVideo):
+                                            continue
+                                        # 创建引用
+                                        video_id = element_info.video_id
+                                        coros_watch_video_behavior.append(
+                                            self.course_api.watch_video_behavior(
+                                                class_id=class_id,
+                                                textbook_id=textbook_id,
+                                                chapter_id=chapter_id,
+                                                video_id=video_id,
+                                            )
+                                        )
+
+                                    # 异步调度
+                                    results_watch_video_behavior = await asyncio.gather(
+                                        *coros_watch_video_behavior
+                                    )
+
+                                    # 解析异步调度信息
+                                    parsed_watch_video_behaviors: dict[int, bool] = {}
+                                    for result in results_watch_video_behavior:
+                                        for video_id, watch_status in result.items():
+                                            parsed_watch_video_behaviors[video_id] = (
+                                                watch_status
+                                            )
+
                                     # 遍历所有元素
                                     for element_info in page_info.elements:
 
@@ -1330,14 +1477,9 @@ class CourseManager:
                                         video_id = element_info.video_id
 
                                         # 上报视频观看行为, 疑似是用来前端防多开
-                                        watch_status = (
-                                            await self.course_api.watch_video_behavior(
-                                                class_id=class_id,
-                                                textbook_id=textbook_id,
-                                                chapter_id=chapter_id,
-                                                video_id=video_id,
-                                            )
-                                        )
+                                        watch_status = parsed_watch_video_behaviors[
+                                            video_id
+                                        ]
 
                                         if not watch_status:
                                             logger.warning(

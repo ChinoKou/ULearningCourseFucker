@@ -229,7 +229,7 @@ class CourseAPI:
 
     async def get_textbook_info(
         self, textbook_id: int, class_id: int
-    ) -> TextbookInfoAPIResponse | None:
+    ) -> dict[int, TextbookInfoAPIResponse] | None:
         """
         获取教材信息API
 
@@ -237,8 +237,8 @@ class CourseAPI:
         :type textbook_id: int
         :param class_id: 你在该教材对应的课程的班级ID
         :type class_id: int
-        :return: 教材信息API响应数据模型
-        :rtype: TextbookInfoAPIResponse | None
+        :return: dict[教材ID, 教材信息API响应数据模型]
+        :rtype: dict[int, TextbookInfoAPIResponse] | None
         """
         logger.debug(
             f"[API][O] 获取教材信息 教材 ID - {textbook_id} 班级 ID - {class_id}"
@@ -263,20 +263,22 @@ class CourseAPI:
                 f"[API][✓] 获取教材信息 教材 ID - {textbook_id} 班级 ID - {class_id}"
             )
 
-            return resp_model
+            return {textbook_id: resp_model}
 
         except Exception as e:
             logger.error(f"{format_exc()}\n[API] 获取教材信息时出错: {e}")
             return None
 
-    async def get_chapter_info(self, chapter_id: int) -> ChapterInfoAPIResponse | None:
+    async def get_chapter_info(
+        self, chapter_id: int
+    ) -> dict[int, ChapterInfoAPIResponse] | None:
         """
         获取章节信息API
 
         :param chapter_id: 章ID
         :type chapter_id: int
-        :return: 章节信息API响应数据模型
-        :rtype: ChapterInfoAPIResponse | None
+        :return: dict[章ID, 章节信息API响应数据模型]
+        :rtype: dict[int, ChapterInfoAPIResponse] | None
         """
         logger.debug(f"[API][O] 获取章节信息, 章节 ID - {chapter_id}")
 
@@ -296,7 +298,7 @@ class CourseAPI:
 
             logger.debug(f"[API][✓] 获取章节信息, 章节 ID - {chapter_id}")
 
-            return resp_model
+            return {chapter_id: resp_model}
 
         except Exception as e:
             logger.error(f"{format_exc()}\n[API] 获取章节信息时出错: {e}")
@@ -304,14 +306,14 @@ class CourseAPI:
 
     async def get_study_record_info(
         self, section_id: int
-    ) -> tuple[bool, StudyRecordAPIResponse | None]:
+    ) -> dict[int, tuple[bool, StudyRecordAPIResponse | None]]:
         """
         获取学习记录信息API
 
         :param section_id: 节ID
         :type section_id: int
-        :return: 学习记录API响应数据模型
-        :rtype: tuple[bool, StudyRecordAPIResponse | None]
+        :return: dict[节ID, (获取成功, 学习记录API响应数据模型 | None)]
+        :rtype: dict[int, tuple[bool, StudyRecordAPIResponse | None]]
         """
         logger.debug(f"[API][O] 获取学习记录信息, 节ID - {section_id}")
 
@@ -324,10 +326,10 @@ class CourseAPI:
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
                 logger.error(f"[API] 获取学习记录信息时网络出错: HTTP {status_code}")
-                return False, None
+                return {section_id: (False, None)}
 
             if not resp.text:
-                return True, None
+                return {section_id: (True, None)}
 
             # 解析数据
             resp_body = resp.json()
@@ -335,15 +337,15 @@ class CourseAPI:
 
             logger.debug(f"[API][✓] 获取学习记录信息, 节ID - {section_id}")
 
-            return True, resp_model
+            return {section_id: (True, resp_model)}
 
         except Exception as e:
             logger.error(f"{format_exc()}\n[API] 获取学习记录信息时出错: {e}")
-            return False, None
+            return {section_id: (False, None)}
 
     async def get_question_answer_list(
         self, question_id: int, parent_id: int
-    ) -> QuestionAnswerAPIResponse | None:
+    ) -> dict[int, QuestionAnswerAPIResponse] | None:
         """
         获取答案列表API
 
@@ -351,8 +353,8 @@ class CourseAPI:
         :type question_id: int
         :param parent_id: 父级页面ID
         :type parent_id: int
-        :return: 问题答案API响应数据模型
-        :rtype: QuestionAnswerAPIResponse | None
+        :return: dict[问题ID, 问题答案API响应数据模型]
+        :rtype: dict[int, QuestionAnswerAPIResponse] | None
         """
         logger.debug(
             f"[API][O] 获取答案列表 问题 ID - {question_id} 页面 ID - {parent_id}"
@@ -377,7 +379,7 @@ class CourseAPI:
                 f"[API][✓] 获取答案列表 问题 ID - {question_id} 页面 ID - {parent_id}"
             )
 
-            return resp_model
+            return {question_id: resp_model}
 
         except Exception as e:
             logger.error(f"{format_exc()}\n[API] 获取答案列表时出错: {e}")
@@ -416,7 +418,7 @@ class CourseAPI:
 
     async def watch_video_behavior(
         self, class_id: int, textbook_id: int, chapter_id: int, video_id: int
-    ) -> bool:
+    ) -> dict[int, bool]:
         """
         上报视频观看行为API
 
@@ -428,8 +430,8 @@ class CourseAPI:
         :type chapter_id: int
         :param video_id: 视频ID
         :type video_id: int
-        :return: 是否上报成功
-        :rtype: bool
+        :return: dict[视频ID, 是否上报成功]
+        :rtype: dict[int, bool]
         """
         logger.debug("[API][O] 上报视频观看行为")
 
@@ -447,17 +449,17 @@ class CourseAPI:
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
                 logger.error(f"[API] 上报视频观看行为时网络出错: HTTP {status_code}")
-                return False
+                return {video_id: False}
 
             # 无内容返回
 
             logger.debug("[API][✓] 上报视频观看行为")
 
-            return True
+            return {video_id: True}
 
         except Exception as e:
             logger.error(f"{format_exc()}\n[API] 上报视频观看行为出错: {e}")
-            return False
+            return {video_id: False}
 
     async def sync_study_record(
         self, study_record_info: SyncStudyRecordAPIRequest
