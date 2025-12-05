@@ -956,6 +956,7 @@ class CourseManager:
             "课件配置",
             "开始刷课",
             "查看刷课信息",
+            "删除课件",
             "修改刷课上报时长",
             "清理已刷完课程",
             "返回",
@@ -964,6 +965,7 @@ class CourseManager:
             "课件配置": self.__course_ware_config,
             "开始刷课": self.__start_course_ware,
             "查看刷课信息": self.__print_course_ware_info,
+            "删除课件": self.__remove_course_ware,
             "修改刷课上报时长": self.__modify_study_time,
             "清理已刷完课程": self.__prune_empty_course_ware,
             "解密同步学习记录请求数据": self.__decrypt_sync_study_record_request,
@@ -1618,6 +1620,236 @@ class CourseManager:
 
         except Exception as e:
             logger.error(f"{format_exc()}\n[MANAGER][COURSE] 查看刷课信息出错: {e}")
+            return None
+
+    async def __remove_course_ware(self) -> None:
+        """删除课件"""
+        logger.debug("[MANAGER][COURSE] 删除课件")
+
+        try:
+            # 创建引用
+            courses = self.user_config.courses
+
+            # 课程为空
+            if not courses:
+                logger.warning("当前用户未配置课程")
+                return None
+
+            # 提示
+            logger.warning(
+                "注意, 请在接下来进行操作前确保你理解优学院课件的架构, 例子如下: "
+            )
+            logger.warning("[课程] -> '形xxx策'")
+            logger.warning(" [教材] -> '形xxx策 2025-2026 第一学期'")
+            logger.warning("   [章] -> '专题一 全面xxx，深入xxx'")
+            logger.warning("     [节] -> '一、全面客观xxx'")
+            logger.warning("       [页] -> '1-1关于xxxx'")
+            logger.warning("       [页] -> '1-2全面客观xxx（一）'")
+            logger.warning("       [页] -> '1-3全面客观xxx（二）'")
+            logger.warning("其中, 每一页内有多个元素, 例如 视频元素/题目元素/文档元素")
+            logger.warning(
+                "因结构过于复杂, CLI不方便实现, 请确保您理解接下来的每一步操作的作用后再进行"
+            )
+            logger.warning("接下来的操作将以 [页] 为单位进行删除")
+
+            # 获取用户确认
+            confirm = await questionary.confirm(
+                message="是否确认继续执行课件删除?"
+            ).ask_async()
+
+            # 取消
+            if not confirm:
+                logger.info("已取消删除课件")
+                return None
+
+            # 创建课程选择
+            course_choices = [
+                f"[{course_id}] {course_info.course_name}"
+                for course_id, course_info in courses.items()
+            ] + ["取消"]
+
+            # 获取用户选择的课程ID列表
+            raw_selected_course_ids: list[str] = await answer(
+                questionary.checkbox(
+                    message="请先选择要删除的课件所在课程",
+                    choices=course_choices,
+                    validate=lambda x: len(x) > 0 or "不可为空, 请选择",
+                    instruction="(使用方向键移动，空格键选择，a键全选/取消，i键反选)",
+                )
+            )
+
+            if "取消" in raw_selected_course_ids:
+                logger.info("已取消删除课件")
+                return None
+
+            # 解析课程ID列表
+            selected_course_ids = [
+                int(course_id.split("]")[0].split("[")[1].strip())
+                for course_id in raw_selected_course_ids
+            ]
+
+            logger.info(f"[课程] 将要修改 {len(selected_course_ids)} 个课程")
+
+            # 遍历已选中的课程
+            for course_id in selected_course_ids:
+                # 创建引用
+                course_info = courses[course_id]
+                course_name = course_info.course_name
+                textbooks = course_info.textbooks
+
+                logger.info(f"[课程] 正在处理 '{course_name}'")
+
+                # 创建教材选择
+                textbook_choices = [
+                    f"[{textbook_id}] {textbook_info.textbook_name}"
+                    for textbook_id, textbook_info in textbooks.items()
+                ] + ["取消"]
+
+                # 获取用户选择的教材ID列表
+                raw_selected_textbook_ids: list[str] = await answer(
+                    questionary.checkbox(
+                        message="请先选择要删除的课件所在教材",
+                        choices=textbook_choices,
+                        validate=lambda x: len(x) > 0 or "不可为空, 请选择",
+                        instruction="(使用方向键移动，空格键选择，a键全选/取消，i键反选)",
+                    )
+                )
+
+                if "取消" in raw_selected_textbook_ids:
+                    logger.info("已取消删除课件")
+                    return None
+
+                # 解析教材ID列表
+                selected_textbook_ids = [
+                    int(textbook_id.split("]")[0].split("[")[1].strip())
+                    for textbook_id in raw_selected_textbook_ids
+                ]
+
+                logger.info(f"[教材] 将要修改 {len(selected_textbook_ids)} 个教材")
+
+                # 遍历已选中的教材
+                for textbook_id in selected_textbook_ids:
+                    # 创建引用
+                    textbook_info = textbooks[textbook_id]
+                    textbook_name = textbook_info.textbook_name
+                    chapters = textbook_info.chapters
+
+                    logger.info(f"[教材] 正在处理 '{textbook_name}'")
+
+                    # 创建章选择
+                    chapter_choices = [
+                        f"[{chapter_id}] {chapter_info.chapter_name}"
+                        for chapter_id, chapter_info in chapters.items()
+                    ]
+
+                    # 获取用户选择的章ID列表
+                    raw_selected_chapter_ids: list[str] = await answer(
+                        questionary.checkbox(
+                            message="请选择要删除的课件所在章",
+                            choices=chapter_choices,
+                            validate=lambda x: len(x) > 0 or "不可为空, 请选择",
+                            instruction="(使用方向键移动，空格键选择，a键全选/取消，i键反选)",
+                        )
+                    )
+
+                    # 解析章ID列表
+                    selected_chapter_ids = [
+                        int(chapter_id.split("]")[0].split("[")[1].strip())
+                        for chapter_id in raw_selected_chapter_ids
+                    ]
+
+                    logger.info(f"[章] 将要修改 {len(selected_chapter_ids)} 个章")
+
+                    # 遍历已选中的章
+                    for chapter_id in selected_chapter_ids:
+                        # 创建引用
+                        chapter_info = chapters[chapter_id]
+                        chapter_name = chapter_info.chapter_name
+                        sections = chapter_info.sections
+
+                        logger.info(f"[章] 正在处理 '{chapter_name}'")
+
+                        # 创建节选择
+                        section_choices = [
+                            f"[{section_id}] {section_info.section_name}"
+                            for section_id, section_info in sections.items()
+                        ]
+
+                        # 获取用户选择的节ID列表
+                        raw_selected_section_ids: list[str] = await answer(
+                            questionary.checkbox(
+                                message="请选择要删除的课件所在节",
+                                choices=section_choices,
+                                validate=lambda x: len(x) > 0 or "不可为空, 请选择",
+                                instruction="(使用方向键移动，空格键选择，a键全选/取消，i键反选)",
+                            )
+                        )
+
+                        # 解析节ID列表
+                        selected_section_ids = [
+                            int(section_id.split("]")[0].split("[")[1].strip())
+                            for section_id in raw_selected_section_ids
+                        ]
+
+                        logger.info(f"[节] 将要修改 {len(selected_section_ids)} 个节")
+
+                        # 遍历已选中的节
+                        for section_id in selected_section_ids:
+                            # 创建引用
+                            section_info = sections[section_id]
+                            section_name = section_info.section_name
+                            pages = section_info.pages
+
+                            logger.info(f"[节] 正在处理 '{section_name}'")
+
+                            # 创建页面选择
+                            page_choices = [
+                                f"[{page_id}] {page_info.page_name}"
+                                for page_id, page_info in pages.items()
+                            ]
+
+                            # 获取用户选择的页面ID列表
+                            raw_selected_page_ids: list[str] = await answer(
+                                questionary.checkbox(
+                                    message="请选择要删除的页面",
+                                    choices=page_choices,
+                                    validate=lambda x: len(x) > 0 or "不可为空, 请选择",
+                                    instruction="(使用方向键移动，空格键选择，a键全选/取消，i键反选)",
+                                )
+                            )
+
+                            # 解析页面ID列表
+                            selected_page_ids = [
+                                int(page_id.split("]")[0].split("[")[1].strip())
+                                for page_id in raw_selected_page_ids
+                            ]
+
+                            logger.warning(
+                                f"[页面] 将要删除 {len(selected_page_ids)} 个页面"
+                            )
+
+                            # 遍历已选中的页面
+                            for page_id in selected_page_ids:
+                                # 创建引用
+                                page_info = pages[page_id]
+                                page_name = page_info.page_name
+
+                                # 删除页面
+                                pages.pop(page_id)
+                                logger.success(f"已删除页面: {page_name}")
+
+                # 清理空的课件
+                courses[course_id].prune()
+                if not courses[course_id].textbooks:
+                    courses.pop(course_id)
+
+            # 保存配置
+            self.config.save()
+            await self.__print_course_ware_info()
+            logger.success("修改课件成功")
+
+        except Exception as e:
+            logger.error(f"{format_exc()}\n[MANAGER][COURSE] 删除课件: {e}")
             return None
 
     async def __modify_study_time(self) -> None:

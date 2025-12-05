@@ -11,6 +11,8 @@ ULearningCWAuto is an automated CLI tool for completing courseware on the ULearn
 - Document reading simulation
 - Content page completion
 - Customizable study time
+- Multiple users support
+- Modify courseware configuration
 
 ## Support Sites
 
