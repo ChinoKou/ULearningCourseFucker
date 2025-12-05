@@ -1269,30 +1269,6 @@ class CourseManager:
                     # 遍历节
                     for section_id, section_info in sections.items():
                         # 创建引用
-                        section_name = section_info.section_name
-                        resp_status, resp_study_record_info = parsed_study_record_infos[
-                            section_id
-                        ]
-
-                        # 跳过获取失败的学习记录
-                        if not resp_status:
-                            logger.warning(
-                                f"尝试获取学习记录 '{section_name}' 失败, 跳过"
-                            )
-                            continue
-
-                        # 未学习 跳过
-                        if not resp_study_record_info:
-                            continue
-
-                        # 解析学习记录信息
-                        self.data_manager.parse_study_record_info(
-                            course_config=course_config[course_id],
-                            textbook_id=textbook_id,
-                            study_record_info=resp_study_record_info,
-                        )
-
-                        # 创建引用
                         pages: dict[int, CourseWarePage] = section_info.pages
 
                         # 遍历页面
@@ -1365,6 +1341,30 @@ class CourseManager:
                                         question_info.question_answer_list = (
                                             resp_question_answer_list.correctAnswerList
                                         )
+
+                        # 创建引用
+                        section_name = section_info.section_name
+                        resp_status, resp_study_record_info = parsed_study_record_infos[
+                            section_id
+                        ]
+
+                        # 跳过获取失败的学习记录
+                        if not resp_status:
+                            logger.warning(
+                                f"尝试获取学习记录 '{section_name}' 失败, 跳过"
+                            )
+                            continue
+
+                        # 未学习 跳过
+                        if not resp_study_record_info:
+                            continue
+
+                        # 解析学习记录信息
+                        self.data_manager.parse_study_record_info(
+                            course_config=course_config[course_id],
+                            textbook_id=textbook_id,
+                            study_record_info=resp_study_record_info,
+                        )
 
         # 清理空的课件
         for course_id, course_info in dict(course_config).items():
@@ -2190,6 +2190,9 @@ class DataManager:
                         pageid=page_relation_id,
                         studyTime=page_study_time,
                         score=page_score,
+                        coursepageId=(
+                            page_id if page_study_record_dto_questions else None
+                        ),
                         videos=page_study_record_dto_videos,
                         questions=page_study_record_dto_questions,
                     )

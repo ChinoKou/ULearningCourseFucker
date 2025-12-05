@@ -177,6 +177,8 @@ class SyncStudyRecordAPIRequest(BaseModel):
         """回答次数"""
         submitTimes: int = 0  # 0
         """提交次数"""
+        coursepageId: int | None
+        """页面ID = page_id"""
         questions: list[QuestionDTO] = Field(default_factory=list)
         videos: list[VideoDTO] = Field(default_factory=list)
         speaks: list = Field(default_factory=list)
