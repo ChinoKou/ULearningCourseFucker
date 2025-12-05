@@ -53,7 +53,7 @@ class LoginAPI:
         :return: 登录获取的用户信息API响应模型
         :rtype: LoginAPIUserInfoResponse | None
         """
-        logger.debug("执行登录并获取用户信息")
+        logger.debug("[API][O] 执行登录并获取用户信息")
 
         try:
             # 构造 url 与请求体
@@ -67,7 +67,7 @@ class LoginAPI:
 
             if not resp or resp.status_code != 302:
                 status_code = resp.status_code if resp else None
-                logger.error(f"执行登录并用户信息时网络出错: HTTP {status_code}")
+                logger.error(f"[API] 执行登录并用户信息时网络出错: HTTP {status_code}")
                 return None
 
             # 解析数据
@@ -79,20 +79,25 @@ class LoginAPI:
             # URL 解码
             user_info = json.loads(unquote(USERINFO))
 
-            return LoginAPIUserInfoResponse(**user_info)
+            # 转换为模型
+            resp_model = LoginAPIUserInfoResponse(**user_info)
+
+            logger.debug(f"[API][✓] 执行登录并获取用户信息")
+
+            return resp_model
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n执行登录并用户信息时发生错误: {e}")
+            logger.error(f"{format_exc()}\n[API] 执行登录并用户信息时发生错误: {e}")
             return None
 
     async def check_login_status(self) -> bool:
         """
         检查Token是否有效
-        
+
         :return: Token有效状态
         :rtype: bool
         """
-        logger.debug("检查 Token 是否有效")
+        logger.debug("[API][O] 检查Token是否有效")
 
         try:
             # 构造 url 与请求体
@@ -102,14 +107,18 @@ class LoginAPI:
 
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
-                logger.error(f"检查 Token 是否有效时网络出错: HTTP {status_code}")
+                logger.error(f"[API] 检查 Token 是否有效时网络出错: HTTP {status_code}")
                 raise
 
             # 检查接口返回值
-            return resp.text.strip().lower() == "true"
+            parse_info = resp.text.strip().lower() == "true"
+
+            logger.debug(f"[API][✓] 检查Token是否有效")
+
+            return parse_info
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n检查 Token 是否有效时发生错误: {e}")
+            logger.error(f"{format_exc()}\n[API] 检查Token是否有效时发生错误: {e}")
             return False
 
 
@@ -141,7 +150,7 @@ class CourseAPI:
         :return: 课程列表API响应数据模型
         :rtype: CourseListAPIResponse | None
         """
-        logger.debug("获取课程列表")
+        logger.debug("[API][O] 获取课程列表")
 
         try:
             # 构造 url 与请求体
@@ -159,15 +168,19 @@ class CourseAPI:
 
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
-                logger.error(f"获取课程列表时网络出错: HTTP {status_code}")
+                logger.error(f"[API] 获取课程列表时网络出错: HTTP {status_code}")
                 return None
 
             # 解析数据
             resp_body: dict = resp.json()
-            return CourseListAPIResponse(**resp_body)
+            resp_model = CourseListAPIResponse(**resp_body)
+
+            logger.debug(f"[API][✓] 获取课程列表")
+
+            return resp_model
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n获取课程列表时出错: {e}")
+            logger.error(f"{format_exc()}\n[API] 获取课程列表时出错: {e}")
             return None
 
     async def get_textbooks(
@@ -183,7 +196,9 @@ class CourseAPI:
         :return: 教材列表API响应数据模型
         :rtype: TextbookListAPIResponse | None
         """
-        logger.info(f"获取教材列表 课程 ID - {course_id} 班级 ID - {class_id}")
+        logger.debug(
+            f"[API][O] 获取教材列表 课程 ID - {course_id} 班级 ID - {class_id}"
+        )
 
         try:
             # 构造 url 与请求体
@@ -195,15 +210,21 @@ class CourseAPI:
             resp = await self.client.get(url, params=payload)
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
-                logger.error(f"获取教材列表时网络出错: HTTP {status_code}")
+                logger.error(f"[API] 获取教材列表时网络出错: HTTP {status_code}")
                 return None
 
             # 解析数据
             resp_body = resp.json()
-            return TextbookListAPIResponse.create(resp=resp_body)
+            resp_model = TextbookListAPIResponse.create(resp=resp_body)
+
+            logger.debug(
+                f"[API][✓] 获取教材列表 课程 ID - {course_id} 班级 ID - {class_id}"
+            )
+
+            return resp_model
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n获取教材列表时出错: {e}")
+            logger.error(f"{format_exc()}\n[API] 获取教材列表时出错: {e}")
             return None
 
     async def get_textbook_info(
@@ -219,7 +240,9 @@ class CourseAPI:
         :return: 教材信息API响应数据模型
         :rtype: TextbookInfoAPIResponse | None
         """
-        logger.info(f"获取教材信息 教材 ID - {textbook_id} 班级 ID - {class_id}")
+        logger.debug(
+            f"[API][O] 获取教材信息 教材 ID - {textbook_id} 班级 ID - {class_id}"
+        )
 
         try:
             # 构造 url 与请求体
@@ -229,15 +252,21 @@ class CourseAPI:
             resp = await self.client.get(url, params=payload)
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
-                logger.error(f"获取教材信息时网络出错: HTTP {status_code}")
+                logger.error(f"[API] 获取教材信息时网络出错: HTTP {status_code}")
                 return None
 
             # 解析数据
             resp_body = resp.json()
-            return TextbookInfoAPIResponse(**resp_body)
+            resp_model = TextbookInfoAPIResponse(**resp_body)
+
+            logger.debug(
+                f"[API][✓] 获取教材信息 教材 ID - {textbook_id} 班级 ID - {class_id}"
+            )
+
+            return resp_model
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n获取教材信息时出错: {e}")
+            logger.error(f"{format_exc()}\n[API] 获取教材信息时出错: {e}")
             return None
 
     async def get_chapter_info(self, chapter_id: int) -> ChapterInfoAPIResponse | None:
@@ -249,7 +278,7 @@ class CourseAPI:
         :return: 章节信息API响应数据模型
         :rtype: ChapterInfoAPIResponse | None
         """
-        logger.info(f"获取章节信息, 章节 ID - {chapter_id}")
+        logger.debug(f"[API][O] 获取章节信息, 章节 ID - {chapter_id}")
 
         try:
             # 构造 url
@@ -258,15 +287,19 @@ class CourseAPI:
             resp = await self.client.get(url)
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
-                logger.error(f"获取章节信息时网络出错: HTTP {status_code}")
+                logger.error(f"[API] 获取章节信息时网络出错: HTTP {status_code}")
                 return None
 
             # 解析数据
             resp_body = resp.json()
-            return ChapterInfoAPIResponse(**resp_body)
+            resp_model = ChapterInfoAPIResponse(**resp_body)
+
+            logger.debug(f"[API][✓] 获取章节信息, 章节 ID - {chapter_id}")
+
+            return resp_model
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n获取章节信息时出错: {e}")
+            logger.error(f"{format_exc()}\n[API] 获取章节信息时出错: {e}")
             return None
 
     async def get_study_record_info(
@@ -280,7 +313,7 @@ class CourseAPI:
         :return: 学习记录API响应数据模型
         :rtype: tuple[bool, StudyRecordAPIResponse | None]
         """
-        logger.info(f"获取学习记录信息, 节ID - {section_id}")
+        logger.debug(f"[API][O] 获取学习记录信息, 节ID - {section_id}")
 
         try:
             # 构造 url 与请求体
@@ -290,7 +323,7 @@ class CourseAPI:
             resp = await self.client.get(url=url, params=payload)
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
-                logger.error(f"获取学习记录信息时网络出错: HTTP {status_code}")
+                logger.error(f"[API] 获取学习记录信息时网络出错: HTTP {status_code}")
                 return False, None
 
             if not resp.text:
@@ -298,10 +331,14 @@ class CourseAPI:
 
             # 解析数据
             resp_body = resp.json()
-            return True, StudyRecordAPIResponse(**resp_body)
+            resp_model = StudyRecordAPIResponse(**resp_body)
+
+            logger.debug(f"[API][✓] 获取学习记录信息, 节ID - {section_id}")
+
+            return True, resp_model
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n获取学习记录信息时出错: {e}")
+            logger.error(f"{format_exc()}\n[API] 获取学习记录信息时出错: {e}")
             return False, None
 
     async def get_question_answer_list(
@@ -317,7 +354,9 @@ class CourseAPI:
         :return: 问题答案API响应数据模型
         :rtype: QuestionAnswerAPIResponse | None
         """
-        logger.info(f"获取答案列表 问题 ID - {question_id} 页面 ID - {parent_id}")
+        logger.debug(
+            f"[API][O] 获取答案列表 问题 ID - {question_id} 页面 ID - {parent_id}"
+        )
 
         try:
             # 构造 url 与请求体
@@ -327,15 +366,21 @@ class CourseAPI:
             resp = await self.client.get(url=url, params=payload)
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
-                logger.error(f"获取答案列表时网络出错: HTTP {status_code}")
+                logger.error(f"[API] 获取答案列表时网络出错: HTTP {status_code}")
                 return None
 
             # 解析数据
             resp_body = resp.json()
-            return QuestionAnswerAPIResponse(**resp_body)
+            resp_model = QuestionAnswerAPIResponse(**resp_body)
+
+            logger.debug(
+                f"[API][✓] 获取答案列表 问题 ID - {question_id} 页面 ID - {parent_id}"
+            )
+
+            return resp_model
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n获取答案列表时出错: {e}")
+            logger.error(f"{format_exc()}\n[API] 获取答案列表时出错: {e}")
             return None
 
     async def initialize_section(self, section_id: int) -> int | None:
@@ -347,7 +392,7 @@ class CourseAPI:
         :return: 开始刷该节的时间戳
         :rtype: int | None
         """
-        logger.debug(f"初始化课程 节ID - {section_id}")
+        logger.debug(f"[API][O] 初始化课程 节ID - {section_id}")
 
         try:
             # 构造 url 与请求体
@@ -356,13 +401,17 @@ class CourseAPI:
             resp = await self.client.get(url)
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
-                logger.error(f"初始化课件-节时网络出错: HTTP {status_code}")
+                logger.error(f"[API] 初始化课件-节时网络出错: HTTP {status_code}")
                 return None
 
-            return int(resp.text)
+            parse_info = int(resp.text)
+
+            logger.debug(f"[API][✓] 初始化课程 节ID - {section_id}")
+
+            return parse_info
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n初始化课程出错: {e}")
+            logger.error(f"{format_exc()}\n[API] 初始化课程出错: {e}")
             return None
 
     async def watch_video_behavior(
@@ -382,7 +431,7 @@ class CourseAPI:
         :return: 是否上报成功
         :rtype: bool
         """
-        logger.debug("上报视频观看行为")
+        logger.debug("[API][O] 上报视频观看行为")
 
         try:
             # 构造 url 与请求体
@@ -397,15 +446,17 @@ class CourseAPI:
             resp = await self.client.post(url=url, json=payload)
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
-                logger.error(f"上报视频观看行为时网络出错: HTTP {status_code}")
+                logger.error(f"[API] 上报视频观看行为时网络出错: HTTP {status_code}")
                 return False
 
             # 无内容返回
 
+            logger.debug("[API][✓] 上报视频观看行为")
+
             return True
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n上报视频观看行为出错: {e}")
+            logger.error(f"{format_exc()}\n[API] 上报视频观看行为出错: {e}")
             return False
 
     async def sync_study_record(
@@ -419,7 +470,7 @@ class CourseAPI:
         :return: 是否上报成功
         :rtype: bool
         """
-        logger.debug(f"上报学习记录 节ID - {study_record_info.itemid}")
+        logger.debug(f"[API][O] 上报学习记录 节ID - {study_record_info.itemid}")
 
         try:
             # 构造 url 与请求体
@@ -433,17 +484,19 @@ class CourseAPI:
             )
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
-                logger.error(f"上报学习记录时网络出错: HTTP {status_code}")
+                logger.error(f"[API] 上报学习记录时网络出错: HTTP {status_code}")
                 return False
 
             if resp.text != "1":
-                logger.warning("上报学习记录失败")
+                logger.warning("[API] 上报学习记录失败")
                 return False
+
+            logger.debug(f"[API][✓] 上报学习记录 节ID - {study_record_info.itemid}")
 
             return True
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n上报学习记录时出错: {e}")
+            logger.error(f"{format_exc()}\n[API] 上报学习记录时出错: {e}")
             return False
 
 
@@ -453,7 +506,7 @@ class GeneralAPI:
     def __init__(self, username: str, config: "Config", client: "HttpClient") -> None:
         """
         通用API初始化
-        
+
         :param username: 活跃的用户名
         :type username: str
         :param config: 配置对象
@@ -473,7 +526,7 @@ class GeneralAPI:
         :return: 获取用户信息API响应数据模型
         :rtype: GeneralAPIUserInfoAPIResponse | None
         """
-        logger.debug("获取用户信息")
+        logger.debug("[API][O] 获取用户信息")
 
         try:
             # 构造 url 与请求体
@@ -481,12 +534,16 @@ class GeneralAPI:
             resp = await self.client.get(url)
             if not resp or resp.status_code != 200:
                 status_code = resp.status_code if resp else None
-                logger.error(f"获取用户信息时网络出错: HTTP {status_code}")
+                logger.error(f"[API] 获取用户信息时网络出错: HTTP {status_code}")
                 return None
 
             resp_body = resp.json()
-            return GeneralAPIUserInfoAPIResponse(**resp_body)
+            resp_model = GeneralAPIUserInfoAPIResponse(**resp_body)
+
+            logger.debug("[API][✓] 获取用户信息")
+
+            return resp_model
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n获取用户信息时出错: {e}")
+            logger.error(f"{format_exc()}\n[API] 获取用户信息时出错: {e}")
             return None

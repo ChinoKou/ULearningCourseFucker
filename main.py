@@ -36,7 +36,7 @@ class Main:
 
     async def menu(self) -> None:
         """主菜单"""
-        logger.debug("进入主菜单")
+        logger.debug("[MAIN] 进入主菜单")
 
         while True:
             retry = 0

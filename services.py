@@ -87,23 +87,23 @@ class HttpClient:
         if "isValidToken" in url:
             token = url.split("/").pop()
             url_log = url.replace(token, "*" * len(token))
-        logger.debug(f"GET: {url_log}")
+        logger.debug(f"[HTTP][GET] {url_log}")
 
         try:
             return await self.__client.get(url, params=params, timeout=timeout)
 
         except httpx.TransportError as e:
-            logger.error(f"网络错误: {e}")
+            logger.error(f"[HTTP][GET] 网络错误: {e}")
             if retry >= 3:
-                logger.error("请求重试次数过多")
+                logger.error("[HTTP][GET] 请求重试次数过多")
                 return None
 
             await asyncio.sleep(0.5)
-            logger.info("正在重试...")
+            logger.info(f"[HTTP][GET] 正在重试 {url_log}")
             return await self.get(url, params=params, timeout=timeout, retry=retry + 1)
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n请求失败: {e}")
+            logger.error(f"{format_exc()}\n[HTTP][GET] 请求出错: {e}")
             return None
 
     async def post(
@@ -136,7 +136,7 @@ class HttpClient:
         :return: 响应体
         :rtype: Response | None
         """
-        logger.debug(f"POST: {url}")
+        logger.debug(f"[HTTP][POST] {url}")
 
         try:
             return await self.__client.post(
@@ -149,13 +149,13 @@ class HttpClient:
             )
 
         except httpx.TransportError as e:
-            logger.error(f"网络错误: {e}")
+            logger.error(f"[HTTP][POST] 网络错误: {e}")
             if retry >= 3:
-                logger.error("请求重试次数过多")
+                logger.error("[HTTP][POST] 请求重试次数过多")
                 return None
 
             await asyncio.sleep(0.5)
-            logger.info("正在重试...")
+            logger.info(f"[HTTP][POST] 正在重试 {url}")
             return await self.post(
                 url=url,
                 content=content,
@@ -167,7 +167,7 @@ class HttpClient:
             )
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n请求失败: {e}")
+            logger.error(f"{format_exc()}\n[HTTP][POST] 请求出错: {e}")
             return None
 
     def set_token(self, token: str) -> bool:
@@ -180,7 +180,7 @@ class HttpClient:
         :rtype: bool
 
         """
-        logger.debug(f"设置token")
+        logger.debug(f"[HTTP] 设置token")
 
         try:
             # 更新客户端请求头的Authorization属性
@@ -188,7 +188,7 @@ class HttpClient:
             return True
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n设置token失败: {e}")
+            logger.error(f"{format_exc()}\n[HTTP] 设置token出错: {e}")
             return False
 
     def set_cookies(self, cookies: dict) -> bool:
@@ -201,7 +201,7 @@ class HttpClient:
         :rtype: bool
 
         """
-        logger.debug("设置cookies")
+        logger.debug("[HTTP] 设置cookies")
 
         try:
             # 更新客户端的Cookie
@@ -209,7 +209,7 @@ class HttpClient:
             return True
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n设置cookies失败: {e}")
+            logger.error(f"{format_exc()}\n[HTTP] 设置cookies出错: {e}")
             return False
 
     def get_cookies(self) -> dict:
@@ -220,14 +220,14 @@ class HttpClient:
         :rtype: dict[Any, Any]
 
         """
-        logger.debug("获取cookies")
+        logger.debug("[HTTP] 获取cookies")
 
         try:
             # 获取内部客户端的Cookie
             return dict(self.__client.cookies)
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n获取cookies失败: {e}")
+            logger.error(f"{format_exc()}\n[HTTP] 获取cookies出错: {e}")
             return {}
 
     def copy_client(self) -> "HttpClient | None":
@@ -237,7 +237,7 @@ class HttpClient:
         :return: HttpClient对象
         :rtype: HttpClient | None
         """
-        logger.debug("复制Http客户端")
+        logger.debug("[HTTP] 复制Http客户端")
 
         try:
             # 获取当前鉴权令牌
@@ -250,7 +250,7 @@ class HttpClient:
             return new_http_client
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n复制Http客户端失败: {e}")
+            logger.error(f"{format_exc()}\n[HTTP] 复制Http客户端出错: {e}")
             return None
 
     async def re_create_client(
@@ -269,7 +269,7 @@ class HttpClient:
         :rtype: bool
 
         """
-        logger.debug("重新创建内部Http客户端")
+        logger.debug("[HTTP] 重新创建内部Http客户端")
 
         try:
             # 创建新的内部客户端AsyncClient
@@ -292,7 +292,7 @@ class HttpClient:
             return True
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n重新创建内部Http客户端失败: {e}")
+            logger.error(f"{format_exc()}\n[HTTP] 重新创建内部Http客户端出错: {e}")
             return False
 
 
@@ -317,7 +317,7 @@ class UserManager:
 
     async def menu(self) -> None:
         """用户管理菜单"""
-        logger.debug("进入用户管理菜单")
+        logger.debug("[MANAGER][USER] 进入用户管理菜单")
 
         # 初始化选项
         choices: list[str] = [
@@ -349,11 +349,11 @@ class UserManager:
                 await choices_map[choice]()
 
         except KeyboardInterrupt as e:
-            logger.info("强制退出用户管理")
+            logger.info("[MANAGER][USER] 强制退出用户管理")
             return None
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n用户管理出现异常: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][USER] 用户管理出现异常: {e}")
             return None
 
     async def __login(self, user_config: UserConfig) -> bool:
@@ -366,7 +366,7 @@ class UserManager:
         :rtype: bool
 
         """
-        logger.debug(f"登录用户: {user_config.username}")
+        logger.debug(f"[MANAGER][USER] 登录用户: {user_config.username}")
 
         try:
             # 创建Http客户端
@@ -429,12 +429,12 @@ class UserManager:
             return False
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n登录失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][USER] 登录出错: {e}")
             return False
 
     async def __add_user(self) -> bool:
         """添加账号"""
-        logger.debug("添加账号")
+        logger.debug("[MANAGER][USER] 添加账号")
 
         try:
             while True:
@@ -493,11 +493,11 @@ class UserManager:
             return True
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n添加用户失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][USER] 添加用户出错: {e}")
             return False
 
     async def __remove_user(self) -> bool:
-        logger.debug("删除账号")
+        logger.debug("[MANAGER][USER] 删除账号")
 
         try:
             while True:
@@ -529,11 +529,11 @@ class UserManager:
                     self.users.pop(username)
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n删除用户失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][USER] 删除用户出错: {e}")
             return False
 
     async def __switch_user(self) -> bool:
-        logger.debug("选择用户")
+        logger.debug("[MANAGER][USER] 选择用户")
 
         try:
             while True:
@@ -565,11 +565,11 @@ class UserManager:
             return True
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n选择用户失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][USER] 选择用户出错: {e}")
             return False
 
     async def __modify_user(self) -> bool:
-        logger.debug("修改用户信息")
+        logger.debug("[MANAGER][USER] 修改用户信息")
 
         try:
             while True:
@@ -684,23 +684,23 @@ class UserManager:
             return True
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n修改用户信息失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][USER] 修改用户信息出错: {e}")
             return False
 
     async def refresh_login_status(self) -> bool:
         """刷新登录状态"""
-        logger.debug("刷新登录状态")
+        logger.debug("[MANAGER][USER] 刷新登录状态")
 
         try:
             return await self.__login(self.config.users[self.config.active_user])
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n刷新登录状态失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][USER] 刷新登录状态出错: {e}")
             return False
 
     async def check_login_status(self) -> bool:
         """检查登录状态"""
-        logger.debug("检查登录状态")
+        logger.debug("[MANAGER][USER] 检查登录状态")
 
         try:
             # 检查配置文件中的活跃用户是否存在于内存中的用户管理
@@ -732,12 +732,12 @@ class UserManager:
             return False
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n检查登录状态失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][USER] 检查登录状态出错: {e}")
             return False
 
     async def get_client(self) -> HttpClient | None:
         """获取 HttpClient 对象"""
-        logger.debug("获取 HttpClient 对象")
+        logger.debug("[MANAGER][USER] 获取 HttpClient 对象")
 
         try:
             if hasattr(self, "active_client") and self.active_client:
@@ -746,7 +746,9 @@ class UserManager:
             return None
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n获取 HttpClient 对象失败: {e}")
+            logger.error(
+                f"{format_exc()}\n[MANAGER][USER] 获取 HttpClient 对象出错: {e}"
+            )
             return None
 
 
@@ -768,7 +770,7 @@ class ConfigManager:
 
     async def menu(self) -> None:
         """配置管理菜单"""
-        logger.debug("配置管理菜单")
+        logger.debug("[MANAGER][CONFIG] 配置管理菜单")
 
         # 初始化选项
         choices = [
@@ -798,12 +800,12 @@ class ConfigManager:
                 await choices_map[choice]()
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n配置管理彩蛋失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][CONFIG] 配置管理菜单出错: {e}")
             return None
 
     async def __change_debug_mode(self) -> None:
         """修改调试模式"""
-        logger.debug("修改调试模式")
+        logger.debug("[MANAGER][CONFIG] 修改调试模式")
 
         try:
             # 获取用户选择
@@ -845,12 +847,12 @@ class ConfigManager:
                 logger.success("已关闭调试模式")
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n修改调试模式失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][CONFIG] 修改调试模式出错: {e}")
             return None
 
     async def __change_sleep_time(self) -> None:
         """修改上报冷却"""
-        logger.debug("修改上报冷却")
+        logger.debug("[MANAGER][CONFIG] 修改上报冷却")
 
         try:
             current_sleep_time = self.config.sleep_time
@@ -869,12 +871,12 @@ class ConfigManager:
             logger.success(f"已修改上报冷却时间为 {self.config.sleep_time}s")
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n修改上报冷却失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][CONFIG] 修改上报冷却出错: {e}")
             return None
 
     async def __reload_config(self) -> None:
         """重新读取配置文件"""
-        logger.debug("重新读取配置文件")
+        logger.debug("[MANAGER][CONFIG] 重新读取配置文件")
 
         try:
             reload_status = self.config.reload()
@@ -885,19 +887,19 @@ class ConfigManager:
                 logger.warning("重新读取配置文件失败")
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n重新读取配置文件失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][CONFIG] 重新读取配置文件出错: {e}")
             return None
 
     async def __rewrite_config(self) -> None:
         """重新写入配置文件"""
-        logger.debug("重新写入配置文件")
+        logger.debug("[MANAGER][CONFIG] 重新写入配置文件")
 
         try:
             self.config.save()
             logger.success("已重新写入配置文件")
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n重新写入配置文件失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][CONFIG] 重新写入配置文件出错: {e}")
             return None
 
 
@@ -925,7 +927,7 @@ class CourseManager:
 
     async def menu(self) -> None:
         """课程管理菜单"""
-        logger.debug("课程管理菜单")
+        logger.debug("[MANAGER][COURSE] 课程管理菜单")
 
         # 初始化选项
         choices: list[str] = [
@@ -961,16 +963,16 @@ class CourseManager:
                 await choices_map[choice]()
 
         except KeyboardInterrupt as e:
-            logger.info("用户强制退出课程管理")
+            logger.info("[MANAGER][COURSE] 用户强制退出课程管理")
             return None
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n课程管理菜单出现异常: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][COURSE] 课程管理菜单出现异常: {e}")
             return None
 
     async def __course_ware_config(self) -> None:
         """课件配置"""
-        logger.debug("课件配置")
+        logger.debug("[MANAGER][COURSE] 课件配置")
 
         try:
             # 获取用户的课程列表
@@ -1095,14 +1097,14 @@ class CourseManager:
             self.config.save()
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n课件配置失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][COURSE] 课件配置出错: {e}")
             return None
 
     async def __complete_course_ware(
         self, course_config: dict[int, ModelCourse]
     ) -> None:
         """获取教材详细信息, 章节信息, 节信息, 答案信息, 视频信息补全课程配置对象"""
-        logger.debug("补全课件信息")
+        logger.debug("[MANAGER][COURSE] 补全课件信息")
 
         # 遍历课程
         for course_id, course_info in course_config.items():
@@ -1229,7 +1231,7 @@ class CourseManager:
 
     async def __start_course_ware(self) -> None:
         """开始刷课"""
-        logger.debug("开始刷课")
+        logger.debug("[MANAGER][COURSE] 开始刷课")
 
         try:
             if not self.user_config.courses:
@@ -1376,12 +1378,12 @@ class CourseManager:
                             await asyncio.sleep(self.config.sleep_time)
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n刷课过程出现异常: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][COURSE] 刷课过程出现异常: {e}")
             return None
 
     async def __print_course_ware_info(self) -> None:
         """查看刷课信息"""
-        logger.debug("查看刷课信息")
+        logger.debug("[MANAGER][COURSE] 查看刷课信息")
 
         try:
             if not self.user_config.courses:
@@ -1446,12 +1448,12 @@ class CourseManager:
             print("=" * 100)
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n查看刷课信息失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][COURSE] 查看刷课信息出错: {e}")
             return None
 
     async def __modify_study_time(self) -> None:
         """修改刷课上报时长"""
-        logger.debug("修改刷课上报时长")
+        logger.debug("[MANAGER][COURSE] 修改刷课上报时长")
 
         try:
             while True:
@@ -1523,12 +1525,12 @@ class CourseManager:
                 )
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n修改刷课上报时长失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][COURSE] 修改刷课上报时长出错: {e}")
             return None
 
     async def __prune_empty_course_ware(self) -> None:
         """清理已刷完课程"""
-        logger.debug("清理已刷完课程")
+        logger.debug("[MANAGER][COURSE] 清理已刷完课程")
 
         try:
             if not self.user_config.courses:
@@ -1543,12 +1545,12 @@ class CourseManager:
             self.config.save()
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n清理已刷完课程失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][COURSE] 清理已刷完课程出错: {e}")
             return None
 
     async def __decrypt_sync_study_record_request(self) -> None:
         """解密同步学习记录请求数据"""
-        logger.debug("解密同步学习记录请求数据")
+        logger.debug("[MANAGER][COURSE] 解密同步学习记录请求数据")
 
         try:
             encrypted_text = await answer(
@@ -1563,7 +1565,9 @@ class CourseManager:
             )
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n解密同步学习记录请求数据失败: {e}")
+            logger.error(
+                f"{format_exc()}\n[MANAGER][COURSE] 解密同步学习记录请求数据出错: {e}"
+            )
 
 
 class DataManager:
@@ -1583,7 +1587,7 @@ class DataManager:
         :return: 解析是否成功
         :rtype: bool
         """
-        logger.debug("解析教材信息")
+        logger.debug("[MANAGER][DATA] 解析教材信息")
 
         try:
             # 创建引用
@@ -1648,11 +1652,11 @@ class DataManager:
                             page_content_type=page_content_type,
                         )
 
-            logger.debug("教材信息解析成功")
+            logger.debug("[MANAGER][DATA] 教材信息解析成功")
             return True
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n解析教材信息失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][DATA] 解析教材信息出错: {e}")
             return False
 
     def parse_chapter_info(
@@ -1673,7 +1677,7 @@ class DataManager:
         :return: 解析是否成功
         :rtype: bool
         """
-        logger.debug("解析章节信息")
+        logger.debug("[MANAGER][DATA] 解析章节信息")
 
         try:
             # 创建引用
@@ -1777,11 +1781,11 @@ class DataManager:
                                 ElementQuestion(questions=questions)
                             )
 
-            logger.debug(f"解析章节信息成功")
+            logger.debug(f"[MANAGER][DATA] 解析章节信息成功")
             return True
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n解析章节信息失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][DATA] 解析章节信息出错: {e}")
             return False
 
     def parse_study_record_info(
@@ -1802,7 +1806,7 @@ class DataManager:
         :return: 解析是否成功
         :rtype: bool
         """
-        logger.debug(f"解析学习记录信息")
+        logger.debug(f"[MANAGER][DATA] 解析学习记录信息")
 
         try:
             # 创建引用
@@ -1824,11 +1828,11 @@ class DataManager:
                         # 设置页面完成状态
                         course_page_info.is_complete = bool(page_is_complete)
 
-            logger.debug(f"解析学习记录信息成功")
+            logger.debug(f"[MANAGER][DATA] 解析学习记录信息成功")
             return True
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n解析学习记录信息失败: {e}")
+            logger.error(f"{format_exc()}\n[MANAGER][DATA] 解析学习记录信息出错: {e}")
             return False
 
     def build_sync_study_record_request(
@@ -1852,7 +1856,7 @@ class DataManager:
         :return: 同步学习记录请求数据模型
         :rtype: SyncStudyRecordAPIRequest | None
         """
-        logger.debug(f"构造同步学习记录请求")
+        logger.debug(f"[MANAGER][DATA] 构造同步学习记录请求")
 
         try:
             # 创建引用
@@ -2029,5 +2033,7 @@ class DataManager:
             )
 
         except Exception as e:
-            logger.error(f"{format_exc()}\n构造同步学习记录请求失败: {e}")
+            logger.error(
+                f"{format_exc()}\n[MANAGER][DATA] 构造同步学习记录请求出错: {e}"
+            )
             return None
