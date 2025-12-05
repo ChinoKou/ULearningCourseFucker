@@ -2045,6 +2045,7 @@ class DataManager:
             # 遍历该节下的所有页面信息
             for page_id, page_info in pages.items():
                 # 创建引用
+                page_relation_id = page_info.page_relation_id
                 page_content_type = page_info.page_content_type
                 page_name = page_info.page_name
 
@@ -2186,7 +2187,7 @@ class DataManager:
                 # 创建页面数据模型
                 page_study_record_dto_list.append(
                     PageStudyRecordDTO(
-                        pageid=page_id,
+                        pageid=page_relation_id,
                         studyTime=page_study_time,
                         score=page_score,
                         videos=page_study_record_dto_videos,
