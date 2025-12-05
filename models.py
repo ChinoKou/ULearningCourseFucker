@@ -192,7 +192,7 @@ class SyncStudyRecordAPIRequest(BaseModel):
     studyStartTime: int
     """初始化返回的时间戳(s)"""
     userName: str
-    """姓名 GeneralAPIUserInfoAPIResponse 的 name 属性"""
+    """姓名 CourseAPIUserInfoAPIResponse 的 name 属性"""
     score: int = 100
     """分数"""
     pageStudyRecordDTOList: list[PageStudyRecordDTO]
@@ -610,7 +610,7 @@ class LoginAPIUserInfoResponse(BaseModel):
     """优学院版本"""
 
 
-class GeneralAPIUserInfoAPIResponse(BaseModel):
+class CourseAPIUserInfoAPIResponse(BaseModel):
     """
     获取用户信息API响应数据模型
     url = https://api.ulearning.cn/user

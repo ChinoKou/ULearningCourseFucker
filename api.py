@@ -10,7 +10,7 @@ from models import (
     APIUrl,
     ChapterInfoAPIResponse,
     CourseListAPIResponse,
-    GeneralAPIUserInfoAPIResponse,
+    CourseAPIUserInfoAPIResponse,
     LoginAPIUserInfoResponse,
     QuestionAnswerAPIResponse,
     StudyRecordAPIResponse,
@@ -385,6 +385,35 @@ class CourseAPI:
             logger.error(f"{format_exc()}\n[API] 获取答案列表时出错: {e}")
             return None
 
+    async def get_user_info(self) -> CourseAPIUserInfoAPIResponse | None:
+        """
+        获取用户信息API
+
+        :return: 获取用户信息API响应数据模型
+        :rtype: CourseAPIUserInfoAPIResponse | None
+        """
+        logger.debug("[API][O] 获取用户信息")
+
+        try:
+            # 构造 url 与请求体
+            url = f"{self.api.ua_api}/user"
+            resp = await self.client.get(url)
+            if not resp or resp.status_code != 200:
+                status_code = resp.status_code if resp else None
+                logger.error(f"[API] 获取用户信息时网络出错: HTTP {status_code}")
+                return None
+
+            resp_body = resp.json()
+            resp_model = CourseAPIUserInfoAPIResponse(**resp_body)
+
+            logger.debug("[API][✓] 获取用户信息")
+
+            return resp_model
+
+        except Exception as e:
+            logger.error(f"{format_exc()}\n[API] 获取用户信息时出错: {e}")
+            return None
+
     async def initialize_section(self, section_id: int) -> int | None:
         """
         初始化课件-节API
@@ -500,52 +529,3 @@ class CourseAPI:
         except Exception as e:
             logger.error(f"{format_exc()}\n[API] 上报学习记录时出错: {e}")
             return False
-
-
-class GeneralAPI:
-    """通用API"""
-
-    def __init__(self, username: str, config: "Config", client: "HttpClient") -> None:
-        """
-        通用API初始化
-
-        :param username: 活跃的用户名
-        :type username: str
-        :param config: 配置对象
-        :type config: "Config"
-        :param client: 内部Http客户端对象
-        :type client: "HttpClient"
-        """
-        self.user_config = config.users[username]
-        self.config = config
-        self.client = client
-        self.api = APIUrl.create(self.user_config.site)
-
-    async def get_user_info(self) -> GeneralAPIUserInfoAPIResponse | None:
-        """
-        获取用户信息API
-
-        :return: 获取用户信息API响应数据模型
-        :rtype: GeneralAPIUserInfoAPIResponse | None
-        """
-        logger.debug("[API][O] 获取用户信息")
-
-        try:
-            # 构造 url 与请求体
-            url = f"{self.api.ua_api}/user"
-            resp = await self.client.get(url)
-            if not resp or resp.status_code != 200:
-                status_code = resp.status_code if resp else None
-                logger.error(f"[API] 获取用户信息时网络出错: HTTP {status_code}")
-                return None
-
-            resp_body = resp.json()
-            resp_model = GeneralAPIUserInfoAPIResponse(**resp_body)
-
-            logger.debug("[API][✓] 获取用户信息")
-
-            return resp_model
-
-        except Exception as e:
-            logger.error(f"{format_exc()}\n[API] 获取用户信息时出错: {e}")
-            return None

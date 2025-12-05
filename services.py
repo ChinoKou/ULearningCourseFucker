@@ -10,10 +10,11 @@ import httpx
 import questionary
 from loguru import logger
 
-from api import CourseAPI, GeneralAPI, LoginAPI
+from api import CourseAPI, LoginAPI
 from models import (
     ChapterInfoAPIResponse,
     ConfigModel,
+    CourseAPIUserInfoAPIResponse,
     CourseListAPIResponse,
     CourseWareChapter,
     CourseWarePage,
@@ -22,7 +23,6 @@ from models import (
     ElementDocumen,
     ElementQuestion,
     ElementVideo,
-    GeneralAPIUserInfoAPIResponse,
     ModelCourse,
     ModelTextbook,
     QuestionAnswerAPIResponse,
@@ -944,7 +944,6 @@ class CourseManager:
         self.config = config
         self.client = client
         self.course_api = CourseAPI(username=username, config=config, client=client)
-        self.general_api = GeneralAPI(username=username, config=config, client=client)
         self.data_manager = DataManager()
 
     async def menu(self) -> None:
@@ -1383,7 +1382,7 @@ class CourseManager:
                 logger.warning("当前用户未配置课程")
                 return None
 
-            user_info = await self.general_api.get_user_info()
+            user_info = await self.course_api.get_user_info()
             if not user_info:
                 logger.warning("获取用户信息失败")
                 return None
@@ -1558,7 +1557,7 @@ class CourseManager:
 
         try:
             if not self.user_config.courses:
-                logger.warning("当前用户未配置课程")
+                logger.warning("当前用户已配置课程列表为空")
                 return None
 
             print("=" * 100)
@@ -2320,7 +2319,7 @@ class DataManager:
         self,
         study_start_time: int,
         section_info: CourseWareSection,
-        user_info: GeneralAPIUserInfoAPIResponse,
+        user_info: CourseAPIUserInfoAPIResponse,
         study_time_config: ConfigModel.StudyTime,
     ) -> SyncStudyRecordAPIRequest | None:
         """
@@ -2331,7 +2330,7 @@ class DataManager:
         :param section_info: 节信息
         :type section_info: CourseWareSection
         :param user_info: 获取用户信息API响应数据模型
-        :type user_info: GeneralAPIUserInfoAPIResponse
+        :type user_info: CourseAPIUserInfoAPIResponse
         :param study_time_config: 配置文件中的学习时间配置
         :type study_time_config: ConfigModel.StudyTime
         :return: 同步学习记录请求数据模型
