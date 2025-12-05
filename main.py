@@ -56,8 +56,9 @@ class Main:
 
             choice = await answer(
                 questionary.select(
-                    message="请选择",
+                    message="[主菜单] 请选择",
                     choices=self.choices,
+                    instruction="(使用方向键选择, 回车键确认)",
                 )
             )
             if choice == "退出":

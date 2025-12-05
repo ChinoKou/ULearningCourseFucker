@@ -341,7 +341,13 @@ class UserManager:
 
         try:
             while True:
-                choice = await answer(questionary.select("请选择", choices=choices))
+                choice = await answer(
+                    questionary.select(
+                        message="[用户管理菜单] 请选择",
+                        choices=choices,
+                        instruction="(使用方向键选择, 回车键确认)",
+                    )
+                )
 
                 if choice == "返回":
                     return None
@@ -441,7 +447,9 @@ class UserManager:
                 # 获取站点和用户名
                 site: str = await answer(
                     questionary.select(
-                        message="请选择站点", choices=[k for k, v in self.sites.items()]
+                        message="请选择站点",
+                        choices=[k for k, v in self.sites.items()],
+                        instruction="(使用方向键选择, 回车键确认)",
                     )
                 )
                 username: str = await answer(
@@ -511,6 +519,7 @@ class UserManager:
                     questionary.select(
                         message="请选择要删除的账号",
                         choices=username_choices,
+                        instruction="(使用方向键选择, 回车键确认)",
                     )
                 )
 
@@ -527,6 +536,8 @@ class UserManager:
 
                 if username in self.users:
                     self.users.pop(username)
+                
+                logger.success(f"成功删除账号: {username}")
 
         except Exception as e:
             logger.error(f"{format_exc()}\n[MANAGER][USER] 删除用户出错: {e}")
@@ -543,6 +554,7 @@ class UserManager:
                         message="请选择用户",
                         choices=[k for k, v in self.config.users.items()]
                         + ["添加新账号", "修改账号信息", "返回"],
+                        instruction="(使用方向键选择, 回车键确认)",
                     )
                 )
 
@@ -578,6 +590,7 @@ class UserManager:
                     questionary.select(
                         message="请选择要修改的用户",
                         choices=[k for k, v in self.config.users.items()] + ["返回"],
+                        instruction="(使用方向键选择, 回车键确认)",
                     )
                 )
 
@@ -629,6 +642,7 @@ class UserManager:
                         questionary.select(
                             message="请选择要修改的属性",
                             choices=attr_choices,
+                            instruction="(使用方向键选择, 回车键确认)",
                         )
                     )
                     if attr == "返回":
@@ -643,6 +657,7 @@ class UserManager:
                             questionary.select(
                                 message="请选择站点",
                                 choices=[k for k, v in self.sites.items()],
+                                instruction="(使用方向键选择, 回车键确认)",
                             )
                         )
                         attr_value = self.sites[attr_value]["name"]
@@ -791,7 +806,11 @@ class ConfigManager:
         try:
             while True:
                 choice = await answer(
-                    questionary.select(message="请选择", choices=choices)
+                    questionary.select(
+                        message="[配置管理菜单] 请选择",
+                        choices=choices,
+                        instruction="(使用方向键选择, 回车键确认)",
+                    )
                 )
 
                 if choice == "返回":
@@ -813,6 +832,7 @@ class ConfigManager:
                 questionary.select(
                     message="请选择调试模式",
                     choices=["开启", "关闭", "返回"],
+                    instruction="(使用方向键选择, 回车键确认)",
                 )
             )
             if choice == "返回":
@@ -954,7 +974,11 @@ class CourseManager:
         try:
             while True:
                 choice = await answer(
-                    questionary.select(message="请选择", choices=choices)
+                    questionary.select(
+                        message="[课程管理菜单] 请选择",
+                        choices=choices,
+                        instruction="(使用方向键选择, 回车键确认)",
+                    )
                 )
 
                 if choice == "返回":
@@ -991,6 +1015,7 @@ class CourseManager:
                     message="请选择要刷的课程",
                     choices=course_choices,
                     validate=lambda x: len(x) > 0 or "不可为空, 请选择",
+                    instruction="(使用方向键移动，空格键选择，a键全选/取消，i键反选)",
                 )
             )
 
@@ -1052,6 +1077,7 @@ class CourseManager:
                     message="请选择要刷的教材",
                     choices=textbook_choices,
                     validate=lambda x: len(x) > 0 or "不可为空, 请选择",
+                    instruction="(使用方向键移动，空格键选择，a键全选/取消，i键反选)",
                 )
             )
 
@@ -1476,6 +1502,7 @@ class CourseManager:
                     questionary.select(
                         message="请选择要修改的学习时长上报类型",
                         choices=config_type_choices,
+                        instruction="(使用方向键选择, 回车键确认)",
                     )
                 )
 
