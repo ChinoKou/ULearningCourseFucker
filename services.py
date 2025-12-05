@@ -967,7 +967,7 @@ class CourseManager:
             "查看刷课信息": self.__print_course_ware_info,
             "删除课件": self.__remove_course_ware,
             "修改刷课上报时长": self.__modify_study_time,
-            "清理已刷完课程": self.__prune_empty_course_ware,
+            "清理已刷完课程": self.__prune_completed_course_ware,
             "解密同步学习记录请求数据": self.__decrypt_sync_study_record_request,
             "返回": lambda: None,
         }
@@ -1930,7 +1930,7 @@ class CourseManager:
             logger.error(f"{format_exc()}\n[MANAGER][COURSE] 修改刷课上报时长出错: {e}")
             return None
 
-    async def __prune_empty_course_ware(self) -> None:
+    async def __prune_completed_course_ware(self) -> None:
         """清理已刷完课程"""
         logger.debug("[MANAGER][COURSE] 清理已刷完课程")
 
@@ -1939,12 +1939,91 @@ class CourseManager:
                 logger.warning("当前用户未配置课程")
                 return None
 
+            logger.info(f"正在重新获取学习记录")
+
+            # 遍历课程
+            for course_id, course_info in self.user_config.courses.items():
+                # 创建引用
+                textbooks = course_info.textbooks
+
+                # 遍历教材
+                for textbook_id, textbook_info in textbooks.items():
+                    # 创建引用
+                    chapters = textbook_info.chapters
+
+                    # 遍历章
+                    for chapter_id, chapter_info in chapters.items():
+                        # 创建引用
+                        chapter_name = chapter_info.chapter_name
+                        sections = chapter_info.sections
+
+                        # 收集获取学习记录信息的协程对象列表
+                        coros_get_study_record_info = []
+                        for section_id, section_info in sections.items():
+                            coros_get_study_record_info.append(
+                                self.course_api.get_study_record_info(
+                                    section_id=section_id
+                                )
+                            )
+
+                        # 异步调度
+                        results_get_study_record_info = await asyncio.gather(
+                            *coros_get_study_record_info
+                        )
+
+                        # 解析异步调度信息
+                        parsed_study_record_infos: dict[
+                            int, tuple[bool, StudyRecordAPIResponse | None]
+                        ] = {}
+                        for result in results_get_study_record_info:
+                            for section_id, (
+                                status,
+                                study_record_info,
+                            ) in result.items():
+                                parsed_study_record_infos[section_id] = (
+                                    status,
+                                    study_record_info,
+                                )
+
+                        logger.success(
+                            f"[章节][{chapter_name}] 获取到 {len(parsed_study_record_infos)} 个学习记录信息"
+                        )
+
+                        # 遍历节
+                        for section_id, section_info in sections.items():
+                            # 创建引用
+                            section_name = section_info.section_name
+                            resp_status, resp_study_record_info = (
+                                parsed_study_record_infos[section_id]
+                            )
+                            # 跳过获取失败的学习记录
+                            if not resp_status:
+                                logger.warning(
+                                    f"尝试获取学习记录 '{section_name}' 失败, 跳过"
+                                )
+                                continue
+
+                            # 未学习 跳过
+                            if not resp_study_record_info:
+                                continue
+
+                            # 解析学习记录信息
+                            self.data_manager.parse_study_record_info(
+                                course_config=course_info,
+                                textbook_id=textbook_id,
+                                study_record_info=resp_study_record_info,
+                            )
+
+            # 删除已刷完课程
             for course_id, course_info in dict(self.user_config.courses).items():
                 course_info.prune(remove_complete=True)
                 if not course_info.textbooks:
                     self.user_config.courses.pop(course_id)
 
+            # 保存配置
             self.config.save()
+            await self.__print_course_ware_info()
+            logger.success("成功清理已刷完课程")
 
         except Exception as e:
             logger.error(f"{format_exc()}\n[MANAGER][COURSE] 清理已刷完课程出错: {e}")
