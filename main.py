@@ -52,7 +52,7 @@ class Main:
 
             self.active_client = await self.user_manager.get_client()
 
-            logger.info(f"当前用户: '{self.config.active_user}'")
+            logger.info(f"当前用户: {self.config.active_user}")
 
             choice = await answer(
                 questionary.select(

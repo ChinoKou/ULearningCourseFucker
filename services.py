@@ -738,6 +738,7 @@ class UserManager:
             # 配置文件不存在活跃用户
             elif not self.config.users:
                 # 全新启动, 添加用户
+                logger.info("全新启动, 添加新用户")
                 return await self.__add_user()
 
             # 其他情况, 如活跃用户为空时

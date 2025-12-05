@@ -11,7 +11,7 @@ from utils import config_text_decrypt, config_text_encrypt
 class Config(ConfigModel):
     """配置信息类"""
 
-    def save(self, config_name: str = "ulearning_config.yaml") -> None:
+    def save(self, config_name: str = "ulearning_cw_config.yaml") -> None:
         """保存配置信息到 YAML 文件"""
 
         try:
@@ -53,7 +53,7 @@ class Config(ConfigModel):
             return False
 
     @classmethod
-    def load(cls, config_name: str = "ulearning_config.yaml") -> "Config":
+    def load(cls, config_name: str = "ulearning_cw_config.yaml") -> "Config":
         """从 YAML 文件加载配置信息"""
 
         try:

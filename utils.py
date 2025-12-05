@@ -117,7 +117,7 @@ def sync_text_decrypt(text: str) -> str:
     return decoded_text
 
 
-def set_logger(debug=False, dir_name: str = "ulearning_logs") -> None:
+def set_logger(debug=False, dir_name: str = "ulearning_cw_logs") -> None:
     """设置日志"""
 
     # 创建日志目录
