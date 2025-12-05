@@ -43,7 +43,7 @@ class HttpClient:
     """内部Http客户端"""
 
     def __init__(
-        self, token: str = "a", cookies: dict = {}, debug: bool = False
+        self, token: str = "a", cookies: dict | None = None, debug: bool = False
     ) -> None:
         """
         内部Http客户端初始化
@@ -51,21 +51,27 @@ class HttpClient:
         :param token: 鉴权令牌
         :type token: str
         :param cookies: Cookie字典对象
-        :type cookies: dict
+        :type cookies: dict | None
         :param debug: 是否为调试模式
         :type debug: bool
         """
 
         self.debug = debug
         self.__client = httpx.AsyncClient(verify=not self.debug)
+        USER_AGENT = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0"
+        )
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0"
+            "User-Agent": USER_AGENT
         }
         if token != "a":
             headers["Authorization"] = token
 
         self.__client.headers.update(headers)
-        self.__client.cookies.update(cookies)
+        if cookies:
+            self.__client.cookies.update(cookies)
 
     async def get(
         self, url: str, params: dict | None = None, timeout: int = 15, retry: int = 0
@@ -255,7 +261,7 @@ class HttpClient:
             return None
 
     async def re_create_client(
-        self, token: str = "a", cookies: dict = {}, debug: bool = False
+        self, token: str = "a", cookies: dict | None = None, debug: bool = False
     ) -> bool:
         """
         重新创建内部Http客户端
@@ -263,7 +269,7 @@ class HttpClient:
         :param token: 鉴权令牌
         :type token: str
         :param cookies: Cookies字典对象
-        :type cookies: dict
+        :type cookies: dict | None
         :param debug: 是否为调试模式
         :type debug: bool
         :return: 是否重新创建成功
@@ -309,7 +315,7 @@ class UserManager:
         """
 
         self.config: "Config" = config
-        self.active_client: HttpClient
+        self.active_client: HttpClient | None = None
         self.users: dict[str, UserAPI] = {}
         self.sites: dict[str, dict[str, str]] = {
             "主站": {"name": "ulearning", "url": "ulearning.cn"},
@@ -1055,10 +1061,6 @@ class CourseManager:
 
                 if not textbooks:
                     logger.warning(f"课程 {selected_course_info.name} 获取教材失败")
-                    continue
-
-                if not textbooks.textbooks:
-                    logger.warning(f"课程 {selected_course_info.name} 没有课件")
                     continue
 
                 # 初始化已选择的课程的教材列表
