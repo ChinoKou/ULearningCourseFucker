@@ -114,7 +114,7 @@ class ModelCourse(BaseModel):
     class_user_id: int
     textbooks: dict[int, ModelTextbook] = Field(default_factory=dict)
 
-    def prune(self, remove_complete:bool = False) -> None:
+    def prune(self, remove_complete: bool = False) -> None:
         """清理已刷完的教材和空教材"""
         for textbook_id, textbook in dict(self.textbooks).items():
             textbook.prune(remove_complete)
@@ -591,7 +591,8 @@ class LoginAPIUserInfoResponse(BaseModel):
     """头像"""
     roleId: int
     """角色ID"""
-    sex: str
+    sex: str | None = None
+    """性别"""
     orgHome: str
     """机构主页"""
     userId: int
